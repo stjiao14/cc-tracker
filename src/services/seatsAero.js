@@ -1,24 +1,27 @@
 const API_KEY = import.meta.env.VITE_SEATS_AERO_API_KEY
 
-// In dev, Vite proxy handles /partnerapi → seats.aero
-// In production, call seats.aero directly (requires CORS or a proxy)
-const BASE_URL = import.meta.env.DEV
-  ? '/partnerapi'
-  : 'https://seats.aero/partnerapi'
+const SEATS_AERO_BASE = 'https://seats.aero/partnerapi'
 
-async function apiRequest(endpoint, params = {}) {
-  const url = new URL(endpoint, window.location.origin)
-  if (!endpoint.startsWith('http')) {
-    url.pathname = `${BASE_URL}${endpoint}`
-  }
-
+function buildUrl(endpoint, params = {}) {
+  const target = new URL(SEATS_AERO_BASE + endpoint)
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== '') {
-      url.searchParams.set(key, value)
+      target.searchParams.set(key, value)
     }
   })
 
-  const res = await fetch(url.toString(), {
+  if (import.meta.env.DEV) {
+    // In dev, Vite proxy rewrites /partnerapi → seats.aero
+    return `/partnerapi${endpoint}?${target.searchParams.toString()}`
+  }
+  // In production, route through CORS proxy
+  return `https://corsproxy.io/?${encodeURIComponent(target.toString())}`
+}
+
+async function apiRequest(endpoint, params = {}) {
+  const url = buildUrl(endpoint, params)
+
+  const res = await fetch(url, {
     headers: { 'Partner-Authorization': API_KEY },
   })
 

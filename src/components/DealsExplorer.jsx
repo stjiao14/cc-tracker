@@ -1,19 +1,15 @@
 import { useState } from 'react'
-import { cachedSearch, getTrips, CABIN_OPTIONS, SOURCES, isApiKeyConfigured } from '../services/seatsAero'
+import { getAvailability, getTrips, CABIN_OPTIONS, SOURCES, REGIONS, isApiKeyConfigured } from '../services/seatsAero'
 import { formatDate } from '../utils/helpers'
 
-const AIRPORT_CODE_RE = /^[A-Z]{3}$/
-
-export default function AwardSearch() {
+export default function DealsExplorer() {
   const [form, setForm] = useState({
-    origin: '',
-    destination: '',
+    source: '',
     cabin: 'business',
     startDate: '',
     endDate: '',
-    source: '',
-    directOnly: false,
-    orderBy: '',
+    originRegion: '',
+    destinationRegion: '',
   })
   const [results, setResults] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -26,30 +22,22 @@ export default function AwardSearch() {
   const apiReady = isApiKeyConfigured()
 
   const handleChange = (e) => {
-    const { name, value, type, checked } = e.target
-    setForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }))
+    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
   }
 
-  const buildSearchParams = () => {
-    const origin = form.origin.toUpperCase().trim()
-    const destination = form.destination.toUpperCase().trim()
-    return {
-      origin,
-      destination,
-      cabin: form.cabin,
-      startDate: form.startDate,
-      endDate: form.endDate,
-      source: form.source || undefined,
-      directOnly: form.directOnly || undefined,
-      orderBy: form.orderBy || undefined,
-    }
-  }
+  const buildParams = () => ({
+    source: form.source,
+    cabin: form.cabin,
+    startDate: form.startDate || undefined,
+    endDate: form.endDate || undefined,
+    originRegion: form.originRegion || undefined,
+    destinationRegion: form.destinationRegion || undefined,
+  })
 
   const handleSearch = async (e) => {
     e.preventDefault()
-    const params = buildSearchParams()
-    if (!AIRPORT_CODE_RE.test(params.origin) || !AIRPORT_CODE_RE.test(params.destination)) {
-      setError('Please enter valid 3-letter airport codes (e.g. SFO, NRT).')
+    if (!form.source) {
+      setError('Please select a mileage program.')
       return
     }
     setLoading(true)
@@ -57,7 +45,7 @@ export default function AwardSearch() {
     setResults(null)
     setExpandedTrip(null)
     try {
-      const data = await cachedSearch(params)
+      const data = await getAvailability(buildParams())
       setResults(data)
     } catch (err) {
       setError(err.message)
@@ -70,8 +58,7 @@ export default function AwardSearch() {
     if (!results?.cursor) return
     setLoadingMore(true)
     try {
-      const params = buildSearchParams()
-      const data = await cachedSearch({ ...params, cursor: results.cursor })
+      const data = await getAvailability({ ...buildParams(), cursor: results.cursor })
       setResults(prev => ({
         ...data,
         data: [...(prev?.data || []), ...(data.data || [])],
@@ -113,9 +100,7 @@ export default function AwardSearch() {
   }
 
   const cabinLabel = { Y: 'Economy', W: 'Prem Econ', J: 'Business', F: 'First' }
-
   const formatMiles = (n) => n != null ? Number(n).toLocaleString() : '—'
-
   const formatTaxes = (cents, currency) => {
     if (!cents) return null
     const amount = (cents / 100).toFixed(0)
@@ -124,38 +109,25 @@ export default function AwardSearch() {
 
   return (
     <div>
-      <h2>Award Search</h2>
-      <p className="section-desc">Search award flight availability across mileage programs via Seats.aero</p>
+      <h2>Deals Explorer</h2>
+      <p className="section-desc">Browse award availability across regions by mileage program</p>
 
       {!apiReady && (
         <div className="award-error">
-          Seats.aero API key is not configured. Add <code>VITE_SEATS_AERO_API_KEY</code> to your <code>.env</code> file and restart the dev server.
+          Seats.aero API key is not configured. Add <code>VITE_SEATS_AERO_API_KEY</code> to your <code>.env</code> file.
         </div>
       )}
 
       <form className="award-search-form" onSubmit={handleSearch}>
         <div className="award-form-grid">
           <label>
-            Origin
-            <input
-              name="origin"
-              placeholder="SFO"
-              value={form.origin}
-              onChange={handleChange}
-              maxLength={3}
-              required
-            />
-          </label>
-          <label>
-            Destination
-            <input
-              name="destination"
-              placeholder="NRT"
-              value={form.destination}
-              onChange={handleChange}
-              maxLength={3}
-              required
-            />
+            Program
+            <select name="source" value={form.source} onChange={handleChange} required>
+              <option value="">Select Program</option>
+              {SOURCES.map(s => (
+                <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+              ))}
+            </select>
           </label>
           <label>
             Cabin
@@ -166,11 +138,20 @@ export default function AwardSearch() {
             </select>
           </label>
           <label>
-            Program
-            <select name="source" value={form.source} onChange={handleChange}>
-              <option value="">All Programs</option>
-              {SOURCES.map(s => (
-                <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+            Origin Region
+            <select name="originRegion" value={form.originRegion} onChange={handleChange}>
+              <option value="">All Regions</option>
+              {REGIONS.map(r => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Destination Region
+            <select name="destinationRegion" value={form.destinationRegion} onChange={handleChange}>
+              <option value="">All Regions</option>
+              {REGIONS.map(r => (
+                <option key={r} value={r}>{r}</option>
               ))}
             </select>
           </label>
@@ -183,21 +164,8 @@ export default function AwardSearch() {
             <input type="date" name="endDate" value={form.endDate} onChange={handleChange} />
           </label>
         </div>
-        <div className="award-form-options">
-          <label className="checkbox-label">
-            <input type="checkbox" name="directOnly" checked={form.directOnly} onChange={handleChange} />
-            Nonstop flights only
-          </label>
-          <label>
-            Sort by
-            <select name="orderBy" value={form.orderBy} onChange={handleChange}>
-              <option value="">Default</option>
-              <option value="price">Price (lowest first)</option>
-            </select>
-          </label>
-        </div>
-        <button type="submit" className="btn btn-primary award-search-btn" disabled={loading || !apiReady}>
-          {loading ? 'Searching...' : 'Search Awards'}
+        <button type="submit" className="btn btn-primary award-search-btn" disabled={loading || !apiReady || !form.source}>
+          {loading ? 'Searching...' : 'Browse Deals'}
         </button>
       </form>
 
@@ -206,7 +174,7 @@ export default function AwardSearch() {
       {results && (
         <div className="award-results">
           <div className="award-results-header">
-            <h3>{results.count || 0} result{results.count !== 1 ? 's' : ''} found</h3>
+            <h3>{results.count || 0} deal{results.count !== 1 ? 's' : ''} found</h3>
             {results.hasMore && <span className="tag tag-blue">More available</span>}
           </div>
 
@@ -227,6 +195,9 @@ export default function AwardSearch() {
                       <div className="award-route-meta">
                         <span className="tag">{formatDate(row.Date)}</span>
                         <span className="tag tag-blue">{row.Source}</span>
+                        {row.Route?.OriginRegion && (
+                          <span className="tag tag-outline">{row.Route.OriginRegion}</span>
+                        )}
                         <span className={`expand-arrow ${expandedTrip === row.ID ? 'expanded' : ''}`}>▼</span>
                       </div>
                     </div>
@@ -242,9 +213,6 @@ export default function AwardSearch() {
                           <span className="cabin-seats">{c.seats} seat{c.seats !== 1 ? 's' : ''}</span>
                         </div>
                       ))}
-                      {getCabinAvailability(row).length === 0 && (
-                        <span className="empty-text">No cabin availability</span>
-                      )}
                     </div>
                   </div>
 
@@ -276,11 +244,6 @@ export default function AwardSearch() {
                                   {new Date(seg.DepartsAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                 </span>
                               )}
-                              {seg.ArrivesAt && (
-                                <span className="segment-time">
-                                  → {new Date(seg.ArrivesAt).toLocaleString([], { hour: '2-digit', minute: '2-digit' })}
-                                </span>
-                              )}
                             </div>
                           ))}
                         </div>
@@ -308,7 +271,7 @@ export default function AwardSearch() {
           ) : (
             <div className="empty-state">
               <div className="empty-icon">✈</div>
-              <p>No award availability found for this route and date range.</p>
+              <p>No deals found for this program and filter combination.</p>
             </div>
           )}
 
@@ -319,7 +282,7 @@ export default function AwardSearch() {
               disabled={loadingMore}
               style={{ marginTop: '1rem', width: '100%' }}
             >
-              {loadingMore ? 'Loading more...' : 'Load More Results'}
+              {loadingMore ? 'Loading more...' : 'Load More Deals'}
             </button>
           )}
         </div>

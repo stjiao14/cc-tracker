@@ -54,7 +54,10 @@ async function apiRequest(endpoint, params = {}) {
   return res.json()
 }
 
-export async function cachedSearch({ origin, destination, cabin, startDate, endDate, source, cursor }) {
+export async function cachedSearch({
+  origin, destination, cabin, startDate, endDate, source, cursor,
+  directOnly, orderBy, take, carriers,
+}) {
   return apiRequest('/search', {
     origin_airport: origin,
     destination_airport: destination,
@@ -63,6 +66,10 @@ export async function cachedSearch({ origin, destination, cabin, startDate, endD
     end_date: endDate,
     source,
     cursor,
+    only_direct_flights: directOnly || undefined,
+    order_by: orderBy || undefined,
+    take: take || undefined,
+    carriers: carriers || undefined,
   })
 }
 
@@ -70,15 +77,42 @@ export async function getTrips(id) {
   return apiRequest(`/trips/${id}`)
 }
 
+export async function getAvailability({
+  source, cabin, startDate, endDate, originRegion, destinationRegion,
+  cursor, take, skip,
+}) {
+  return apiRequest('/availability', {
+    source,
+    cabin,
+    start_date: startDate,
+    end_date: endDate,
+    origin_region: originRegion,
+    destination_region: destinationRegion,
+    cursor,
+    take,
+    skip,
+  })
+}
+
+export async function getRoutes(source) {
+  return apiRequest('/routes', { source })
+}
+
 export const CABIN_OPTIONS = [
   { value: 'economy', label: 'Economy' },
+  { value: 'premium', label: 'Premium Economy' },
   { value: 'business', label: 'Business' },
   { value: 'first', label: 'First' },
 ]
 
 export const SOURCES = [
   'aeroplan', 'alaska', 'american', 'aeromexico', 'azul', 'copa',
-  'delta', 'emirates', 'ethiopian', 'etihad', 'finnair', 'flyingblue',
+  'delta', 'emirates', 'ethiopian', 'etihad', 'eurobonus', 'finnair', 'flyingblue',
   'gol', 'jetblue', 'lufthansa', 'qantas', 'qatar', 'sas', 'saudia',
-  'singapore', 'turkish', 'united', 'virginatlantic', 'virginaustralia',
+  'singapore', 'turkish', 'united', 'velocity', 'virginatlantic', 'virginaustralia',
+]
+
+export const REGIONS = [
+  'North America', 'South America', 'Europe', 'Africa',
+  'Middle East', 'Asia', 'Oceania',
 ]

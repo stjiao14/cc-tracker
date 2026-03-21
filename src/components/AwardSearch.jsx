@@ -191,38 +191,34 @@ export default function AwardSearch() {
           {results.data && results.data.length > 0 ? (
             <div className="award-results-list">
               {results.data.map((row) => (
-                <div key={row.ID} className="award-result-card">
-                  <div className="award-result-route">
-                    <div className="award-route-airports">
-                      <span className="airport-code">{row.Route?.OriginAirport}</span>
-                      <span className="route-arrow">→</span>
-                      <span className="airport-code">{row.Route?.DestinationAirport}</span>
-                    </div>
-                    <div className="award-route-meta">
-                      <span className="tag">{formatDate(row.Date)}</span>
-                      <span className="tag tag-blue">{row.Source}</span>
-                    </div>
-                  </div>
-
-                  <div className="award-cabins">
-                    {getCabinAvailability(row).map(c => (
-                      <div key={c.cabin} className="award-cabin-pill">
-                        <span className="cabin-label">{cabinLabel[c.cabin]}</span>
-                        <span className="cabin-miles">{formatMiles(c.miles)} mi</span>
-                        <span className="cabin-seats">{c.seats} seat{c.seats !== 1 ? 's' : ''}</span>
+                <div key={row.ID} className={`award-result-card ${expandedTrip === row.ID ? 'expanded' : ''}`}>
+                  <div className="award-result-clickable" onClick={() => handleViewTrips(row.ID)} role="button" tabIndex={0}>
+                    <div className="award-result-route">
+                      <div className="award-route-airports">
+                        <span className="airport-code">{row.Route?.OriginAirport}</span>
+                        <span className="route-arrow">→</span>
+                        <span className="airport-code">{row.Route?.DestinationAirport}</span>
                       </div>
-                    ))}
-                    {getCabinAvailability(row).length === 0 && (
-                      <span className="empty-text">No cabin availability</span>
-                    )}
-                  </div>
+                      <div className="award-route-meta">
+                        <span className="tag">{formatDate(row.Date)}</span>
+                        <span className="tag tag-blue">{row.Source}</span>
+                        <span className={`expand-arrow ${expandedTrip === row.ID ? 'expanded' : ''}`}>▼</span>
+                      </div>
+                    </div>
 
-                  <button
-                    className="btn btn-secondary award-trips-btn"
-                    onClick={() => handleViewTrips(row.ID)}
-                  >
-                    {expandedTrip === row.ID ? 'Hide Flights' : 'View Flights'}
-                  </button>
+                    <div className="award-cabins">
+                      {getCabinAvailability(row).map(c => (
+                        <div key={c.cabin} className="award-cabin-pill">
+                          <span className="cabin-label">{cabinLabel[c.cabin]}</span>
+                          <span className="cabin-miles">{formatMiles(c.miles)} mi</span>
+                          <span className="cabin-seats">{c.seats} seat{c.seats !== 1 ? 's' : ''}</span>
+                        </div>
+                      ))}
+                      {getCabinAvailability(row).length === 0 && (
+                        <span className="empty-text">No cabin availability</span>
+                      )}
+                    </div>
+                  </div>
 
                   {expandedTrip === row.ID && (
                     <div className="award-trip-details">

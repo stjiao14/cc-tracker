@@ -1,10 +1,27 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { cachedSearch, getTrips, CABIN_OPTIONS, SOURCES, isApiKeyConfigured } from '../services/seatsAero'
 import { formatDate } from '../utils/helpers'
+import { getTransferablePrograms } from '../utils/transferPartners'
 
-const AIRPORT_CODE_RE = /^[A-Z]{3}$/
+const AIRPORT_RE = /^[A-Z]{3}(,[A-Z]{3})*$/
 
-export default function AwardSearch() {
+function parseAirports(raw) {
+  return raw.toUpperCase().replace(/\s/g, '').trim()
+}
+
+const SAVED_SEARCHES_KEY = 'cc-tracker-saved-searches'
+
+function loadSavedSearches() {
+  try {
+    return JSON.parse(localStorage.getItem(SAVED_SEARCHES_KEY)) || []
+  } catch { return [] }
+}
+
+function persistSavedSearches(searches) {
+  localStorage.setItem(SAVED_SEARCHES_KEY, JSON.stringify(searches))
+}
+
+export default function AwardSearch({ cards = [] }) {
   const [form, setForm] = useState({
     origin: '',
     destination: '',
@@ -22,8 +39,14 @@ export default function AwardSearch() {
   const [expandedTrip, setExpandedTrip] = useState(null)
   const [tripDetails, setTripDetails] = useState({})
   const [tripLoading, setTripLoading] = useState(null)
+  const [savedSearches, setSavedSearches] = useState(loadSavedSearches)
 
   const apiReady = isApiKeyConfigured()
+  const transferable = getTransferablePrograms(cards)
+
+  useEffect(() => {
+    persistSavedSearches(savedSearches)
+  }, [savedSearches])
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
@@ -31,8 +54,8 @@ export default function AwardSearch() {
   }
 
   const buildSearchParams = () => {
-    const origin = form.origin.toUpperCase().trim()
-    const destination = form.destination.toUpperCase().trim()
+    const origin = parseAirports(form.origin)
+    const destination = parseAirports(form.destination)
     return {
       origin,
       destination,
@@ -48,8 +71,8 @@ export default function AwardSearch() {
   const handleSearch = async (e) => {
     e.preventDefault()
     const params = buildSearchParams()
-    if (!AIRPORT_CODE_RE.test(params.origin) || !AIRPORT_CODE_RE.test(params.destination)) {
-      setError('Please enter valid 3-letter airport codes (e.g. SFO, NRT).')
+    if (!AIRPORT_RE.test(params.origin) || !AIRPORT_RE.test(params.destination)) {
+      setError('Enter valid 3-letter airport codes. Use commas for multiple (e.g. SFO,LAX).')
       return
     }
     setLoading(true)
@@ -84,6 +107,31 @@ export default function AwardSearch() {
     }
   }
 
+  const handleSaveSearch = () => {
+    const params = buildSearchParams()
+    if (!AIRPORT_RE.test(params.origin) || !AIRPORT_RE.test(params.destination)) return
+    const label = `${params.origin} → ${params.destination} (${form.cabin})`
+    const entry = { ...form, id: Date.now(), label }
+    setSavedSearches(prev => [entry, ...prev.slice(0, 9)])
+  }
+
+  const handleLoadSaved = (saved) => {
+    setForm({
+      origin: saved.origin,
+      destination: saved.destination,
+      cabin: saved.cabin,
+      startDate: saved.startDate || '',
+      endDate: saved.endDate || '',
+      source: saved.source || '',
+      directOnly: saved.directOnly || false,
+      orderBy: saved.orderBy || '',
+    })
+  }
+
+  const handleRemoveSaved = (id) => {
+    setSavedSearches(prev => prev.filter(s => s.id !== id))
+  }
+
   const handleViewTrips = async (availabilityId) => {
     if (expandedTrip === availabilityId) {
       setExpandedTrip(null)
@@ -113,14 +161,20 @@ export default function AwardSearch() {
   }
 
   const cabinLabel = { Y: 'Economy', W: 'Prem Econ', J: 'Business', F: 'First' }
-
   const formatMiles = (n) => n != null ? Number(n).toLocaleString() : '—'
-
   const formatTaxes = (cents, currency) => {
     if (!cents) return null
     const amount = (cents / 100).toFixed(0)
     return currency === 'USD' ? `$${amount}` : `${amount} ${currency || ''}`
   }
+
+  // Cents per mile: taxes(USD cents) / miles * 100 to get cpp
+  const calcCPM = (miles, taxCents) => {
+    if (!miles || !taxCents) return null
+    return (taxCents / miles).toFixed(2)
+  }
+
+  const isTransferable = (source) => transferable.has(source?.toLowerCase())
 
   return (
     <div>
@@ -133,16 +187,29 @@ export default function AwardSearch() {
         </div>
       )}
 
+      {savedSearches.length > 0 && (
+        <div className="saved-searches">
+          <h4 className="saved-searches-title">Saved Searches</h4>
+          <div className="saved-searches-list">
+            {savedSearches.map(s => (
+              <div key={s.id} className="saved-search-chip">
+                <button className="saved-search-btn" onClick={() => handleLoadSaved(s)}>{s.label}</button>
+                <button className="saved-search-remove" onClick={() => handleRemoveSaved(s.id)} title="Remove">×</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <form className="award-search-form" onSubmit={handleSearch}>
         <div className="award-form-grid">
           <label>
             Origin
             <input
               name="origin"
-              placeholder="SFO"
+              placeholder="SFO or SFO,LAX"
               value={form.origin}
               onChange={handleChange}
-              maxLength={3}
               required
             />
           </label>
@@ -150,10 +217,9 @@ export default function AwardSearch() {
             Destination
             <input
               name="destination"
-              placeholder="NRT"
+              placeholder="NRT or NRT,HND"
               value={form.destination}
               onChange={handleChange}
-              maxLength={3}
               required
             />
           </label>
@@ -170,7 +236,9 @@ export default function AwardSearch() {
             <select name="source" value={form.source} onChange={handleChange}>
               <option value="">All Programs</option>
               {SOURCES.map(s => (
-                <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                <option key={s} value={s}>
+                  {s.charAt(0).toUpperCase() + s.slice(1)}{transferable.has(s) ? ' ★' : ''}
+                </option>
               ))}
             </select>
           </label>
@@ -195,11 +263,16 @@ export default function AwardSearch() {
               <option value="price">Price (lowest first)</option>
             </select>
           </label>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={handleSaveSearch}>Save Search</button>
         </div>
         <button type="submit" className="btn btn-primary award-search-btn" disabled={loading || !apiReady}>
           {loading ? 'Searching...' : 'Search Awards'}
         </button>
       </form>
+
+      {transferable.size > 0 && (
+        <p className="transfer-hint">★ = transferable from your credit card points</p>
+      )}
 
       {error && <div className="award-error">{error}</div>}
 
@@ -213,7 +286,7 @@ export default function AwardSearch() {
           {results.data && results.data.length > 0 ? (
             <div className="award-results-list">
               {results.data.map((row) => (
-                <div key={row.ID} className={`award-result-card ${expandedTrip === row.ID ? 'expanded' : ''}`}>
+                <div key={row.ID} className={`award-result-card ${expandedTrip === row.ID ? 'expanded' : ''} ${isTransferable(row.Source) ? 'transferable' : ''}`}>
                   <div className="award-result-clickable" onClick={() => handleViewTrips(row.ID)} role="button" tabIndex={0}>
                     <div className="award-result-route">
                       <div className="award-route-airports">
@@ -226,22 +299,28 @@ export default function AwardSearch() {
                       </div>
                       <div className="award-route-meta">
                         <span className="tag">{formatDate(row.Date)}</span>
-                        <span className="tag tag-blue">{row.Source}</span>
+                        <span className={`tag ${isTransferable(row.Source) ? 'tag-green' : 'tag-blue'}`}>
+                          {row.Source}{isTransferable(row.Source) ? ' ★' : ''}
+                        </span>
                         <span className={`expand-arrow ${expandedTrip === row.ID ? 'expanded' : ''}`}>▼</span>
                       </div>
                     </div>
 
                     <div className="award-cabins">
-                      {getCabinAvailability(row).map(c => (
-                        <div key={c.cabin} className="award-cabin-pill">
-                          <span className="cabin-label">{cabinLabel[c.cabin]}</span>
-                          <span className="cabin-miles">{formatMiles(c.miles)} mi</span>
-                          {c.taxes > 0 && (
-                            <span className="cabin-taxes">+ {formatTaxes(c.taxes, row.TaxesCurrency)}</span>
-                          )}
-                          <span className="cabin-seats">{c.seats} seat{c.seats !== 1 ? 's' : ''}</span>
-                        </div>
-                      ))}
+                      {getCabinAvailability(row).map(c => {
+                        const cpm = calcCPM(c.miles, c.taxes)
+                        return (
+                          <div key={c.cabin} className="award-cabin-pill">
+                            <span className="cabin-label">{cabinLabel[c.cabin]}</span>
+                            <span className="cabin-miles">{formatMiles(c.miles)} mi</span>
+                            {c.taxes > 0 && (
+                              <span className="cabin-taxes">+ {formatTaxes(c.taxes, row.TaxesCurrency)}</span>
+                            )}
+                            {cpm && <span className="cabin-cpm">{cpm} cpp</span>}
+                            <span className="cabin-seats">{c.seats} seat{c.seats !== 1 ? 's' : ''}</span>
+                          </div>
+                        )
+                      })}
                       {getCabinAvailability(row).length === 0 && (
                         <span className="empty-text">No cabin availability</span>
                       )}

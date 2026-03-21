@@ -161,10 +161,10 @@ export default function App() {
           <AnnualFeeTracker cards={cards} />
         )}
         {view === 'awards' && (
-          <AwardSearch />
+          <AwardSearch cards={cards} />
         )}
         {view === 'deals' && (
-          <DealsExplorer />
+          <DealsExplorer cards={cards} />
         )}
         {view === 'routes' && (
           <RouteBrowser />

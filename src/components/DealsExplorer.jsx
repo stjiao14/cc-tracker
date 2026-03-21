@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { getAvailability, getTrips, CABIN_OPTIONS, SOURCES, REGIONS, isApiKeyConfigured } from '../services/seatsAero'
 import { formatDate } from '../utils/helpers'
+import { getTransferablePrograms } from '../utils/transferPartners'
 
-export default function DealsExplorer() {
+export default function DealsExplorer({ cards = [] }) {
   const [form, setForm] = useState({
     source: '',
     cabin: 'business',
@@ -20,6 +21,8 @@ export default function DealsExplorer() {
   const [tripLoading, setTripLoading] = useState(null)
 
   const apiReady = isApiKeyConfigured()
+  const transferable = getTransferablePrograms(cards)
+  const isTransferable = (source) => transferable.has(source?.toLowerCase())
 
   const handleChange = (e) => {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
@@ -106,6 +109,10 @@ export default function DealsExplorer() {
     const amount = (cents / 100).toFixed(0)
     return currency === 'USD' ? `$${amount}` : `${amount} ${currency || ''}`
   }
+  const calcCPM = (miles, taxCents) => {
+    if (!miles || !taxCents) return null
+    return (taxCents / miles).toFixed(2)
+  }
 
   return (
     <div>
@@ -181,7 +188,7 @@ export default function DealsExplorer() {
           {results.data && results.data.length > 0 ? (
             <div className="award-results-list">
               {results.data.map((row) => (
-                <div key={row.ID} className={`award-result-card ${expandedTrip === row.ID ? 'expanded' : ''}`}>
+                <div key={row.ID} className={`award-result-card ${expandedTrip === row.ID ? 'expanded' : ''} ${isTransferable(row.Source) ? 'transferable' : ''}`}>
                   <div className="award-result-clickable" onClick={() => handleViewTrips(row.ID)} role="button" tabIndex={0}>
                     <div className="award-result-route">
                       <div className="award-route-airports">
@@ -194,7 +201,9 @@ export default function DealsExplorer() {
                       </div>
                       <div className="award-route-meta">
                         <span className="tag">{formatDate(row.Date)}</span>
-                        <span className="tag tag-blue">{row.Source}</span>
+                        <span className={`tag ${isTransferable(row.Source) ? 'tag-green' : 'tag-blue'}`}>
+                          {row.Source}{isTransferable(row.Source) ? ' ★' : ''}
+                        </span>
                         {row.Route?.OriginRegion && (
                           <span className="tag tag-outline">{row.Route.OriginRegion}</span>
                         )}
@@ -203,16 +212,20 @@ export default function DealsExplorer() {
                     </div>
 
                     <div className="award-cabins">
-                      {getCabinAvailability(row).map(c => (
-                        <div key={c.cabin} className="award-cabin-pill">
-                          <span className="cabin-label">{cabinLabel[c.cabin]}</span>
-                          <span className="cabin-miles">{formatMiles(c.miles)} mi</span>
-                          {c.taxes > 0 && (
-                            <span className="cabin-taxes">+ {formatTaxes(c.taxes, row.TaxesCurrency)}</span>
-                          )}
-                          <span className="cabin-seats">{c.seats} seat{c.seats !== 1 ? 's' : ''}</span>
-                        </div>
-                      ))}
+                      {getCabinAvailability(row).map(c => {
+                        const cpm = calcCPM(c.miles, c.taxes)
+                        return (
+                          <div key={c.cabin} className="award-cabin-pill">
+                            <span className="cabin-label">{cabinLabel[c.cabin]}</span>
+                            <span className="cabin-miles">{formatMiles(c.miles)} mi</span>
+                            {c.taxes > 0 && (
+                              <span className="cabin-taxes">+ {formatTaxes(c.taxes, row.TaxesCurrency)}</span>
+                            )}
+                            {cpm && <span className="cabin-cpm">{cpm} cpp</span>}
+                            <span className="cabin-seats">{c.seats} seat{c.seats !== 1 ? 's' : ''}</span>
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
 

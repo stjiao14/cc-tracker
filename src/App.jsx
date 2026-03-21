@@ -6,6 +6,7 @@ import CardForm from './components/CardForm'
 import CardDetail from './components/CardDetail'
 import SpendingOptimizer from './components/SpendingOptimizer'
 import AnnualFeeTracker from './components/AnnualFeeTracker'
+import AwardSearch from './components/AwardSearch'
 
 export default function App() {
   const [cards, setCards] = useLocalStorage('cc-tracker-cards', [])
@@ -106,6 +107,14 @@ export default function App() {
               Annual Fees
             </button>
           </li>
+          <li>
+            <button
+              className={view === 'awards' ? 'active' : ''}
+              onClick={() => { setView('awards'); setSelectedCardId(null) }}
+            >
+              Award Search
+            </button>
+          </li>
         </ul>
       </nav>
 
@@ -132,6 +141,9 @@ export default function App() {
         )}
         {view === 'fees' && (
           <AnnualFeeTracker cards={cards} />
+        )}
+        {view === 'awards' && (
+          <AwardSearch />
         )}
       </main>
     </div>

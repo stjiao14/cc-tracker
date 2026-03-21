@@ -217,14 +217,12 @@ export default function AwardSearch() {
                     )}
                   </div>
 
-                  {row.AvailabilityTrips && (
-                    <button
-                      className="btn btn-secondary award-trips-btn"
-                      onClick={() => handleViewTrips(row.ID)}
-                    >
-                      {expandedTrip === row.ID ? 'Hide Flights' : 'View Flights'}
-                    </button>
-                  )}
+                  <button
+                    className="btn btn-secondary award-trips-btn"
+                    onClick={() => handleViewTrips(row.ID)}
+                  >
+                    {expandedTrip === row.ID ? 'Hide Flights' : 'View Flights'}
+                  </button>
 
                   {expandedTrip === row.ID && (
                     <div className="award-trip-details">
@@ -232,35 +230,40 @@ export default function AwardSearch() {
                       {tripDetails[row.ID]?.error && (
                         <p className="award-error">{tripDetails[row.ID].error}</p>
                       )}
-                      {tripDetails[row.ID]?.data && tripDetails[row.ID].data.map((trip) => (
+                      {(tripDetails[row.ID]?.data || tripDetails[row.ID]?.Data)?.map((trip) => (
                         <div key={trip.ID} className="award-trip-option">
                           <div className="trip-header">
                             <span className="tag tag-green">{trip.Cabin}</span>
-                            <span>{trip.MileageCost?.toLocaleString()} miles</span>
+                            <span>{formatMiles(trip.MileageCost)} miles</span>
                             <span>{trip.Stops === 0 ? 'Nonstop' : `${trip.Stops} stop${trip.Stops > 1 ? 's' : ''}`}</span>
                             <span>{Math.floor(trip.TotalDuration / 60)}h {trip.TotalDuration % 60}m</span>
                             <span>{trip.RemainingSeats} seat{trip.RemainingSeats !== 1 ? 's' : ''}</span>
                           </div>
-                          {trip.AvailabilitySegments && trip.AvailabilitySegments.map((seg, i) => (
+                          {(trip.AvailabilitySegments || []).map((seg, i) => (
                             <div key={seg.ID || i} className="trip-segment">
                               <span className="segment-flight">{seg.FlightNumber}</span>
                               <span>{seg.OriginAirport} → {seg.DestinationAirport}</span>
                               <span className="segment-aircraft">{seg.AircraftName || seg.AircraftCode}</span>
+                              {seg.DepartsAt && <span className="segment-time">{new Date(seg.DepartsAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>}
                             </div>
                           ))}
                         </div>
                       ))}
-                      {tripDetails[row.ID]?.booking_links && tripDetails[row.ID].booking_links.length > 0 && (
-                        <div className="trip-booking-links">
-                          {tripDetails[row.ID].booking_links.map((link, i) => (
-                            <a key={i} href={link.link} target="_blank" rel="noopener noreferrer"
-                              className={`btn ${link.primary ? 'btn-primary' : 'btn-secondary'}`}
-                            >
-                              {link.label}
-                            </a>
-                          ))}
-                        </div>
-                      )}
+                      {(() => {
+                        const details = tripDetails[row.ID]
+                        const links = details?.BookingLinks || details?.booking_links
+                        return links?.length > 0 && (
+                          <div className="trip-booking-links">
+                            {links.map((link, i) => (
+                              <a key={i} href={link.Link || link.link} target="_blank" rel="noopener noreferrer"
+                                className={`btn ${(link.Primary || link.primary) ? 'btn-primary' : 'btn-secondary'}`}
+                              >
+                                {link.Label || link.label}
+                              </a>
+                            ))}
+                          </div>
+                        )
+                      })()}
                     </div>
                   )}
                 </div>

@@ -826,4 +826,211 @@ input:focus, select:focus {
   .card-detail-header {
     flex-wrap: wrap;
   }
+
+  .award-form-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .award-cabin-pill {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px !important;
+  }
+}
+
+/* ===== Award Search ===== */
+.award-search-form {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow);
+}
+
+.award-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.award-form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.award-form-grid input,
+.award-form-grid select {
+  text-transform: uppercase;
+}
+
+.award-search-btn {
+  width: 100%;
+  justify-content: center;
+  padding: 10px;
+  font-size: 0.95rem;
+}
+
+.award-error {
+  background: #fef2f2;
+  color: var(--danger);
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  border: 1px solid #fecaca;
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+}
+
+.award-results-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.award-results-header h3 {
+  margin: 0;
+}
+
+.award-results-list {
+  display: grid;
+  gap: 12px;
+}
+
+.award-result-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  box-shadow: var(--shadow);
+  transition: box-shadow 0.15s;
+}
+
+.award-result-card:hover {
+  box-shadow: var(--shadow-lg);
+}
+
+.award-result-route {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.award-route-airports {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.airport-code {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.route-arrow {
+  color: var(--text-secondary);
+  font-size: 1rem;
+}
+
+.award-route-meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.award-cabins {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.award-cabin-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 0.8rem;
+}
+
+.cabin-label {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.cabin-miles {
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.cabin-seats {
+  color: var(--success);
+  font-weight: 500;
+}
+
+.award-trips-btn {
+  font-size: 0.8rem;
+  padding: 6px 12px;
+}
+
+.award-trip-details {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 10px;
+}
+
+.award-trip-option {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+}
+
+.trip-header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.trip-segment {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 0.8rem;
+  padding: 4px 0;
+  color: var(--text-secondary);
+}
+
+.segment-flight {
+  font-weight: 600;
+  color: var(--text);
+  min-width: 60px;
+}
+
+.segment-aircraft {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.trip-booking-links {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
 }

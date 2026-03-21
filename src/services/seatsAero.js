@@ -2,6 +2,10 @@ const API_KEY = import.meta.env.VITE_SEATS_AERO_API_KEY
 
 const SEATS_AERO_BASE = 'https://seats.aero/partnerapi'
 
+export function isApiKeyConfigured() {
+  return Boolean(API_KEY && API_KEY !== 'your_seats_aero_api_key_here')
+}
+
 function buildUrl(endpoint, params = {}) {
   const target = new URL(SEATS_AERO_BASE + endpoint)
   Object.entries(params).forEach(([key, value]) => {
@@ -19,6 +23,10 @@ function buildUrl(endpoint, params = {}) {
 }
 
 async function apiRequest(endpoint, params = {}) {
+  if (!isApiKeyConfigured()) {
+    throw new Error('Seats.aero API key is not configured. Set VITE_SEATS_AERO_API_KEY in your .env file.')
+  }
+
   const url = buildUrl(endpoint, params)
 
   const res = await fetch(url, {
@@ -26,8 +34,21 @@ async function apiRequest(endpoint, params = {}) {
   })
 
   if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`Seats.aero API error ${res.status}: ${text}`)
+    let message
+    try {
+      const text = await res.text()
+      message = text || res.statusText
+    } catch {
+      message = res.statusText
+    }
+
+    if (res.status === 401 || res.status === 403) {
+      throw new Error('Invalid or expired Seats.aero API key. Check your VITE_SEATS_AERO_API_KEY.')
+    }
+    if (res.status === 429) {
+      throw new Error('Rate limit exceeded. Please wait a moment and try again.')
+    }
+    throw new Error(`Seats.aero API error ${res.status}: ${message}`)
   }
 
   return res.json()
@@ -35,8 +56,8 @@ async function apiRequest(endpoint, params = {}) {
 
 export async function cachedSearch({ origin, destination, cabin, startDate, endDate, source, cursor }) {
   return apiRequest('/search', {
-    origin,
-    destination,
+    origin_airport: origin,
+    destination_airport: destination,
     cabin,
     start_date: startDate,
     end_date: endDate,

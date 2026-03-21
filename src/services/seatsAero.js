@@ -56,8 +56,8 @@ async function apiRequest(endpoint, params = {}) {
 
 export async function cachedSearch({ origin, destination, cabin, startDate, endDate, source, cursor }) {
   return apiRequest('/search', {
-    origin,
-    destination,
+    origin_airport: origin,
+    destination_airport: destination,
     cabin,
     start_date: startDate,
     end_date: endDate,

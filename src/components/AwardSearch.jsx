@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { cachedSearch, getTrips, CABIN_OPTIONS, SOURCES } from '../services/seatsAero'
+import { cachedSearch, getTrips, CABIN_OPTIONS, SOURCES, isApiKeyConfigured } from '../services/seatsAero'
 import { formatDate } from '../utils/helpers'
+
+const AIRPORT_CODE_RE = /^[A-Z]{3}$/
 
 export default function AwardSearch() {
   const [form, setForm] = useState({
@@ -13,10 +15,13 @@ export default function AwardSearch() {
   })
   const [results, setResults] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState(null)
   const [expandedTrip, setExpandedTrip] = useState(null)
   const [tripDetails, setTripDetails] = useState({})
   const [tripLoading, setTripLoading] = useState(null)
+
+  const apiReady = isApiKeyConfigured()
 
   const handleChange = (e) => {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
@@ -24,15 +29,20 @@ export default function AwardSearch() {
 
   const handleSearch = async (e) => {
     e.preventDefault()
-    if (!form.origin || !form.destination) return
+    const origin = form.origin.toUpperCase().trim()
+    const destination = form.destination.toUpperCase().trim()
+    if (!AIRPORT_CODE_RE.test(origin) || !AIRPORT_CODE_RE.test(destination)) {
+      setError('Please enter valid 3-letter airport codes (e.g. SFO, NRT).')
+      return
+    }
     setLoading(true)
     setError(null)
     setResults(null)
     setExpandedTrip(null)
     try {
       const data = await cachedSearch({
-        origin: form.origin.toUpperCase(),
-        destination: form.destination.toUpperCase(),
+        origin,
+        destination,
         cabin: form.cabin,
         startDate: form.startDate,
         endDate: form.endDate,
@@ -43,6 +53,31 @@ export default function AwardSearch() {
       setError(err.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleLoadMore = async () => {
+    if (!results?.cursor) return
+    setLoadingMore(true)
+    try {
+      const data = await cachedSearch({
+        origin: form.origin.toUpperCase().trim(),
+        destination: form.destination.toUpperCase().trim(),
+        cabin: form.cabin,
+        startDate: form.startDate,
+        endDate: form.endDate,
+        source: form.source || undefined,
+        cursor: results.cursor,
+      })
+      setResults(prev => ({
+        ...data,
+        data: [...(prev?.data || []), ...(data.data || [])],
+        count: (prev?.count || 0) + (data.count || 0),
+      }))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoadingMore(false)
     }
   }
 
@@ -76,10 +111,18 @@ export default function AwardSearch() {
 
   const cabinLabel = { Y: 'Economy', W: 'Prem Econ', J: 'Business', F: 'First' }
 
+  const formatMiles = (n) => n != null ? Number(n).toLocaleString() : '—'
+
   return (
     <div>
       <h2>Award Search</h2>
       <p className="section-desc">Search award flight availability across mileage programs via Seats.aero</p>
+
+      {!apiReady && (
+        <div className="award-error">
+          Seats.aero API key is not configured. Add <code>VITE_SEATS_AERO_API_KEY</code> to your <code>.env</code> file and restart the dev server.
+        </div>
+      )}
 
       <form className="award-search-form" onSubmit={handleSearch}>
         <div className="award-form-grid">
@@ -131,7 +174,7 @@ export default function AwardSearch() {
             <input type="date" name="endDate" value={form.endDate} onChange={handleChange} />
           </label>
         </div>
-        <button type="submit" className="btn btn-primary award-search-btn" disabled={loading}>
+        <button type="submit" className="btn btn-primary award-search-btn" disabled={loading || !apiReady}>
           {loading ? 'Searching...' : 'Search Awards'}
         </button>
       </form>
@@ -165,7 +208,7 @@ export default function AwardSearch() {
                     {getCabinAvailability(row).map(c => (
                       <div key={c.cabin} className="award-cabin-pill">
                         <span className="cabin-label">{cabinLabel[c.cabin]}</span>
-                        <span className="cabin-miles">{c.miles} mi</span>
+                        <span className="cabin-miles">{formatMiles(c.miles)} mi</span>
                         <span className="cabin-seats">{c.seats} seat{c.seats !== 1 ? 's' : ''}</span>
                       </div>
                     ))}
@@ -228,6 +271,17 @@ export default function AwardSearch() {
               <div className="empty-icon">✈</div>
               <p>No award availability found for this route and date range.</p>
             </div>
+          )}
+
+          {results.hasMore && (
+            <button
+              className="btn btn-secondary award-search-btn"
+              onClick={handleLoadMore}
+              disabled={loadingMore}
+              style={{ marginTop: '1rem', width: '100%' }}
+            >
+              {loadingMore ? 'Loading more...' : 'Load More Results'}
+            </button>
           )}
         </div>
       )}

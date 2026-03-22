@@ -1,9 +1,21 @@
-const API_KEY = import.meta.env.VITE_SEATS_AERO_API_KEY
+const API_KEY_STORAGE_KEY = 'cc-tracker-seats-aero-api-key'
+
+function getApiKey() {
+  return localStorage.getItem(API_KEY_STORAGE_KEY) || ''
+}
+
+export function setApiKey(key) {
+  if (key) {
+    localStorage.setItem(API_KEY_STORAGE_KEY, key.trim())
+  } else {
+    localStorage.removeItem(API_KEY_STORAGE_KEY)
+  }
+}
 
 const SEATS_AERO_BASE = 'https://seats.aero/partnerapi'
 
 export function isApiKeyConfigured() {
-  return Boolean(API_KEY && API_KEY !== 'your_seats_aero_api_key_here')
+  return Boolean(getApiKey())
 }
 
 function buildUrl(endpoint, params = {}) {
@@ -43,8 +55,9 @@ function isTransientError(status) {
 }
 
 async function apiRequest(endpoint, params = {}, { retries = 3, useCache = false } = {}) {
-  if (!isApiKeyConfigured()) {
-    throw new Error('Seats.aero API key is not configured. Set VITE_SEATS_AERO_API_KEY in your .env file.')
+  const apiKey = getApiKey()
+  if (!apiKey) {
+    throw new Error('Seats.aero API key is not configured. Add your key in Settings.')
   }
 
   const url = buildUrl(endpoint, params)
@@ -63,7 +76,7 @@ async function apiRequest(endpoint, params = {}, { retries = 3, useCache = false
 
     try {
       const res = await fetch(url, {
-        headers: { 'Partner-Authorization': API_KEY },
+        headers: { 'Partner-Authorization': apiKey },
       })
 
       // Read API quota from response headers
@@ -87,7 +100,7 @@ async function apiRequest(endpoint, params = {}, { retries = 3, useCache = false
         }
 
         if (res.status === 401 || res.status === 403) {
-          throw new Error('Invalid or expired Seats.aero API key. Check your VITE_SEATS_AERO_API_KEY.')
+          throw new Error('Invalid or expired Seats.aero API key. Check your key in Settings.')
         }
         if (res.status === 429) {
           throw new Error('Rate limit exceeded. Please wait a moment and try again.')

@@ -211,7 +211,7 @@ export default function AwardSearch({ cards = [] }) {
 
       {!apiReady && (
         <div className="award-error">
-          Seats.aero API key is not configured. Add <code>VITE_SEATS_AERO_API_KEY</code> to your <code>.env</code> file and restart the dev server.
+          Seats.aero API key is not configured. Add your API key in <strong>Settings</strong>.
         </div>
       )}
 

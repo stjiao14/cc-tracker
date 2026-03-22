@@ -1302,3 +1302,48 @@ input:focus, select:focus {
   font-size: 0.8rem;
   padding: 4px 10px;
 }
+
+/* Settings page */
+.settings-section {
+  max-width: 600px;
+}
+
+.settings-help {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+.settings-key-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.settings-key-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 0.9rem;
+}
+
+.settings-key-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.settings-saved {
+  color: var(--success);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.settings-key-status {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}

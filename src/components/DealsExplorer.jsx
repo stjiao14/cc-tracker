@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { getAvailability, getTrips, CABIN_OPTIONS, SOURCES, REGIONS, isApiKeyConfigured } from '../services/seatsAero'
+import { getAvailability, getTrips, CABIN_OPTIONS, SOURCES, REGIONS, isApiKeyConfigured, getApiQuota } from '../services/seatsAero'
 import { formatDate } from '../utils/helpers'
 import { getTransferablePrograms } from '../utils/transferPartners'
 
@@ -19,10 +19,16 @@ export default function DealsExplorer({ cards = [] }) {
   const [expandedTrip, setExpandedTrip] = useState(null)
   const [tripDetails, setTripDetails] = useState({})
   const [tripLoading, setTripLoading] = useState(null)
+  const [quota, setQuota] = useState(null)
 
   const apiReady = isApiKeyConfigured()
   const transferable = getTransferablePrograms(cards)
   const isTransferable = (source) => transferable.has(source?.toLowerCase())
+
+  const refreshQuota = () => {
+    const q = getApiQuota()
+    if (q) setQuota(q)
+  }
 
   const handleChange = (e) => {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
@@ -50,8 +56,10 @@ export default function DealsExplorer({ cards = [] }) {
     try {
       const data = await getAvailability(buildParams())
       setResults(data)
+      refreshQuota()
     } catch (err) {
       setError(err.message)
+      refreshQuota()
     } finally {
       setLoading(false)
     }
@@ -67,6 +75,7 @@ export default function DealsExplorer({ cards = [] }) {
         data: [...(prev?.data || []), ...(data.data || [])],
         count: (prev?.count || 0) + (data.count || 0),
       }))
+      refreshQuota()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -86,6 +95,7 @@ export default function DealsExplorer({ cards = [] }) {
     try {
       const data = await getTrips(availabilityId)
       setTripDetails(prev => ({ ...prev, [availabilityId]: data }))
+      refreshQuota()
     } catch (err) {
       setTripDetails(prev => ({ ...prev, [availabilityId]: { error: err.message } }))
     } finally {
@@ -95,10 +105,10 @@ export default function DealsExplorer({ cards = [] }) {
 
   const getCabinAvailability = (row) => {
     const cabins = []
-    if (row.YAvailable) cabins.push({ cabin: 'Y', miles: row.YMileageCost, seats: row.YRemainingSeats, taxes: row.YTotalTaxes })
-    if (row.WAvailable) cabins.push({ cabin: 'W', miles: row.WMileageCost, seats: row.WRemainingSeats, taxes: row.WTotalTaxes })
-    if (row.JAvailable) cabins.push({ cabin: 'J', miles: row.JMileageCost, seats: row.JRemainingSeats, taxes: row.JTotalTaxes })
-    if (row.FAvailable) cabins.push({ cabin: 'F', miles: row.FMileageCost, seats: row.FRemainingSeats, taxes: row.FTotalTaxes })
+    if (row.YAvailable) cabins.push({ cabin: 'Y', miles: row.YMileageCost, seats: row.YRemainingSeats, taxes: row.YTotalTaxes, airlines: row.YAirlines })
+    if (row.WAvailable) cabins.push({ cabin: 'W', miles: row.WMileageCost, seats: row.WRemainingSeats, taxes: row.WTotalTaxes, airlines: row.WAirlines })
+    if (row.JAvailable) cabins.push({ cabin: 'J', miles: row.JMileageCost, seats: row.JRemainingSeats, taxes: row.JTotalTaxes, airlines: row.JAirlines })
+    if (row.FAvailable) cabins.push({ cabin: 'F', miles: row.FMileageCost, seats: row.FRemainingSeats, taxes: row.FTotalTaxes, airlines: row.FAirlines })
     return cabins
   }
 
@@ -116,8 +126,19 @@ export default function DealsExplorer({ cards = [] }) {
 
   return (
     <div>
-      <h2>Deals Explorer</h2>
-      <p className="section-desc">Browse award availability across regions by mileage program</p>
+      <div className="award-search-header">
+        <div>
+          <h2>Deals Explorer</h2>
+          <p className="section-desc">Browse award availability across regions by mileage program</p>
+        </div>
+        {quota && (
+          <div className="api-quota">
+            <span className={`quota-badge ${quota.remaining < 10 ? 'quota-low' : ''}`}>
+              API: {quota.remaining} calls left today
+            </span>
+          </div>
+        )}
+      </div>
 
       {!apiReady && (
         <div className="award-error">
@@ -222,6 +243,7 @@ export default function DealsExplorer({ cards = [] }) {
                               <span className="cabin-taxes">+ {formatTaxes(c.taxes, row.TaxesCurrency)}</span>
                             )}
                             {cpm && <span className="cabin-cpm">{cpm} cpp</span>}
+                            {c.airlines && <span className="cabin-airlines">{c.airlines}</span>}
                             <span className="cabin-seats">{c.seats} seat{c.seats !== 1 ? 's' : ''}</span>
                           </div>
                         )
@@ -240,6 +262,9 @@ export default function DealsExplorer({ cards = [] }) {
                           <div className="trip-header">
                             <span className="tag tag-green">{trip.Cabin}</span>
                             <span>{formatMiles(trip.MileageCost)} miles</span>
+                            {trip.AllianceCost > 0 && trip.AllianceCost !== trip.MileageCost && (
+                              <span className="trip-alliance-cost">({formatMiles(trip.AllianceCost)} alliance)</span>
+                            )}
                             {trip.TotalTaxes > 0 && (
                               <span className="trip-taxes">+ {formatTaxes(trip.TotalTaxes, trip.TaxesCurrency)}</span>
                             )}
@@ -252,9 +277,17 @@ export default function DealsExplorer({ cards = [] }) {
                               <span className="segment-flight">{seg.FlightNumber}</span>
                               <span>{seg.OriginAirport} → {seg.DestinationAirport}</span>
                               <span className="segment-aircraft">{seg.AircraftName || seg.AircraftCode}</span>
+                              {seg.FareClass && (
+                                <span className="segment-fareclass">{seg.FareClass}</span>
+                              )}
                               {seg.DepartsAt && (
                                 <span className="segment-time">
                                   {new Date(seg.DepartsAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              )}
+                              {seg.ArrivesAt && (
+                                <span className="segment-time">
+                                  → {new Date(seg.ArrivesAt).toLocaleString([], { hour: '2-digit', minute: '2-digit' })}
                                 </span>
                               )}
                             </div>

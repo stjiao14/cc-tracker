@@ -20,6 +20,10 @@ function buildUrl(endpoint, params = {}) {
   return `https://corsproxy.io/?${encodeURIComponent(target.toString())}`
 }
 
+// API quota tracking from response headers
+let apiQuota = null
+export function getApiQuota() { return apiQuota }
+
 // Session cache: key → { data, ts }
 const sessionCache = {}
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
@@ -62,6 +66,12 @@ async function apiRequest(endpoint, params = {}, { retries = 3, useCache = false
         headers: { 'Partner-Authorization': API_KEY },
       })
 
+      // Read API quota from response headers
+      const remaining = res.headers.get('x-ratelimit-remaining')
+      if (remaining != null) {
+        apiQuota = { remaining: Number(remaining), ts: Date.now() }
+      }
+
       if (!res.ok) {
         if (isTransientError(res.status) && attempt < retries) {
           lastError = new Error(`Seats.aero API error ${res.status}`)
@@ -85,7 +95,12 @@ async function apiRequest(endpoint, params = {}, { retries = 3, useCache = false
         throw new Error(`Seats.aero API error ${res.status}: ${message}`)
       }
 
-      const data = await res.json()
+      let data
+      try {
+        data = await res.json()
+      } catch {
+        throw new Error('Invalid JSON response from Seats.aero API')
+      }
       if (useCache) setCache(url, data)
       return data
     } catch (err) {
@@ -102,7 +117,7 @@ async function apiRequest(endpoint, params = {}, { retries = 3, useCache = false
 
 export async function cachedSearch({
   origin, destination, cabin, startDate, endDate, source, cursor,
-  directOnly, orderBy, take, carriers,
+  directOnly, orderBy, take, carriers, includeTrips,
 }) {
   return apiRequest('/search', {
     origin_airport: origin,
@@ -116,6 +131,7 @@ export async function cachedSearch({
     order_by: orderBy || undefined,
     take: take || undefined,
     carriers: carriers || undefined,
+    include_trips: includeTrips || undefined,
   }, { useCache: !cursor })
 }
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { cachedSearch, getTrips, CABIN_OPTIONS, SOURCES, isApiKeyConfigured } from '../services/seatsAero'
+import { cachedSearch, getTrips, CABIN_OPTIONS, SOURCES, isApiKeyConfigured, getApiQuota } from '../services/seatsAero'
 import { formatDate } from '../utils/helpers'
 import { getTransferablePrograms } from '../utils/transferPartners'
 
@@ -40,6 +40,7 @@ export default function AwardSearch({ cards = [] }) {
   const [tripDetails, setTripDetails] = useState({})
   const [tripLoading, setTripLoading] = useState(null)
   const [savedSearches, setSavedSearches] = useState(loadSavedSearches)
+  const [quota, setQuota] = useState(null)
 
   const apiReady = isApiKeyConfigured()
   const transferable = getTransferablePrograms(cards)
@@ -47,6 +48,11 @@ export default function AwardSearch({ cards = [] }) {
   useEffect(() => {
     persistSavedSearches(savedSearches)
   }, [savedSearches])
+
+  const refreshQuota = () => {
+    const q = getApiQuota()
+    if (q) setQuota(q)
+  }
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
@@ -80,10 +86,12 @@ export default function AwardSearch({ cards = [] }) {
     setResults(null)
     setExpandedTrip(null)
     try {
-      const data = await cachedSearch(params)
+      const data = await cachedSearch({ ...params, includeTrips: true })
       setResults(data)
+      refreshQuota()
     } catch (err) {
       setError(err.message)
+      refreshQuota()
     } finally {
       setLoading(false)
     }
@@ -94,12 +102,13 @@ export default function AwardSearch({ cards = [] }) {
     setLoadingMore(true)
     try {
       const params = buildSearchParams()
-      const data = await cachedSearch({ ...params, cursor: results.cursor })
+      const data = await cachedSearch({ ...params, cursor: results.cursor, includeTrips: true })
       setResults(prev => ({
         ...data,
         data: [...(prev?.data || []), ...(data.data || [])],
         count: (prev?.count || 0) + (data.count || 0),
       }))
+      refreshQuota()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -132,18 +141,27 @@ export default function AwardSearch({ cards = [] }) {
     setSavedSearches(prev => prev.filter(s => s.id !== id))
   }
 
-  const handleViewTrips = async (availabilityId) => {
+  const handleViewTrips = async (availabilityId, inlineTrips) => {
     if (expandedTrip === availabilityId) {
       setExpandedTrip(null)
       return
     }
     setExpandedTrip(availabilityId)
+
+    // If we already have trip details (from inline or previous fetch), skip
     if (tripDetails[availabilityId]) return
+
+    // Use inline trips from include_trips if available
+    if (inlineTrips) {
+      setTripDetails(prev => ({ ...prev, [availabilityId]: inlineTrips }))
+      return
+    }
 
     setTripLoading(availabilityId)
     try {
       const data = await getTrips(availabilityId)
       setTripDetails(prev => ({ ...prev, [availabilityId]: data }))
+      refreshQuota()
     } catch (err) {
       setTripDetails(prev => ({ ...prev, [availabilityId]: { error: err.message } }))
     } finally {
@@ -153,10 +171,10 @@ export default function AwardSearch({ cards = [] }) {
 
   const getCabinAvailability = (row) => {
     const cabins = []
-    if (row.YAvailable) cabins.push({ cabin: 'Y', miles: row.YMileageCost, seats: row.YRemainingSeats, taxes: row.YTotalTaxes })
-    if (row.WAvailable) cabins.push({ cabin: 'W', miles: row.WMileageCost, seats: row.WRemainingSeats, taxes: row.WTotalTaxes })
-    if (row.JAvailable) cabins.push({ cabin: 'J', miles: row.JMileageCost, seats: row.JRemainingSeats, taxes: row.JTotalTaxes })
-    if (row.FAvailable) cabins.push({ cabin: 'F', miles: row.FMileageCost, seats: row.FRemainingSeats, taxes: row.FTotalTaxes })
+    if (row.YAvailable) cabins.push({ cabin: 'Y', miles: row.YMileageCost, seats: row.YRemainingSeats, taxes: row.YTotalTaxes, airlines: row.YAirlines })
+    if (row.WAvailable) cabins.push({ cabin: 'W', miles: row.WMileageCost, seats: row.WRemainingSeats, taxes: row.WTotalTaxes, airlines: row.WAirlines })
+    if (row.JAvailable) cabins.push({ cabin: 'J', miles: row.JMileageCost, seats: row.JRemainingSeats, taxes: row.JTotalTaxes, airlines: row.JAirlines })
+    if (row.FAvailable) cabins.push({ cabin: 'F', miles: row.FMileageCost, seats: row.FRemainingSeats, taxes: row.FTotalTaxes, airlines: row.FAirlines })
     return cabins
   }
 
@@ -168,7 +186,6 @@ export default function AwardSearch({ cards = [] }) {
     return currency === 'USD' ? `$${amount}` : `${amount} ${currency || ''}`
   }
 
-  // Cents per mile: taxes(USD cents) / miles * 100 to get cpp
   const calcCPM = (miles, taxCents) => {
     if (!miles || !taxCents) return null
     return (taxCents / miles).toFixed(2)
@@ -178,8 +195,19 @@ export default function AwardSearch({ cards = [] }) {
 
   return (
     <div>
-      <h2>Award Search</h2>
-      <p className="section-desc">Search award flight availability across mileage programs via Seats.aero</p>
+      <div className="award-search-header">
+        <div>
+          <h2>Award Search</h2>
+          <p className="section-desc">Search award flight availability across mileage programs via Seats.aero</p>
+        </div>
+        {quota && (
+          <div className="api-quota">
+            <span className={`quota-badge ${quota.remaining < 10 ? 'quota-low' : ''}`}>
+              API: {quota.remaining} calls left today
+            </span>
+          </div>
+        )}
+      </div>
 
       {!apiReady && (
         <div className="award-error">
@@ -287,7 +315,7 @@ export default function AwardSearch({ cards = [] }) {
             <div className="award-results-list">
               {results.data.map((row) => (
                 <div key={row.ID} className={`award-result-card ${expandedTrip === row.ID ? 'expanded' : ''} ${isTransferable(row.Source) ? 'transferable' : ''}`}>
-                  <div className="award-result-clickable" onClick={() => handleViewTrips(row.ID)} role="button" tabIndex={0}>
+                  <div className="award-result-clickable" onClick={() => handleViewTrips(row.ID, row.AvailabilityTrips)} role="button" tabIndex={0}>
                     <div className="award-result-route">
                       <div className="award-route-airports">
                         <span className="airport-code">{row.Route?.OriginAirport}</span>
@@ -317,6 +345,7 @@ export default function AwardSearch({ cards = [] }) {
                               <span className="cabin-taxes">+ {formatTaxes(c.taxes, row.TaxesCurrency)}</span>
                             )}
                             {cpm && <span className="cabin-cpm">{cpm} cpp</span>}
+                            {c.airlines && <span className="cabin-airlines">{c.airlines}</span>}
                             <span className="cabin-seats">{c.seats} seat{c.seats !== 1 ? 's' : ''}</span>
                           </div>
                         )
@@ -338,6 +367,9 @@ export default function AwardSearch({ cards = [] }) {
                           <div className="trip-header">
                             <span className="tag tag-green">{trip.Cabin}</span>
                             <span>{formatMiles(trip.MileageCost)} miles</span>
+                            {trip.AllianceCost > 0 && trip.AllianceCost !== trip.MileageCost && (
+                              <span className="trip-alliance-cost">({formatMiles(trip.AllianceCost)} alliance)</span>
+                            )}
                             {trip.TotalTaxes > 0 && (
                               <span className="trip-taxes">+ {formatTaxes(trip.TotalTaxes, trip.TaxesCurrency)}</span>
                             )}
@@ -350,6 +382,9 @@ export default function AwardSearch({ cards = [] }) {
                               <span className="segment-flight">{seg.FlightNumber}</span>
                               <span>{seg.OriginAirport} → {seg.DestinationAirport}</span>
                               <span className="segment-aircraft">{seg.AircraftName || seg.AircraftCode}</span>
+                              {seg.FareClass && (
+                                <span className="segment-fareclass">{seg.FareClass}</span>
+                              )}
                               {seg.DepartsAt && (
                                 <span className="segment-time">
                                   {new Date(seg.DepartsAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}

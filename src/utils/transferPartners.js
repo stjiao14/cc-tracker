@@ -3,7 +3,7 @@ export const TRANSFER_PARTNERS = {
   'Chase': ['aeroplan', 'emirates', 'flyingblue', 'jetblue', 'singapore', 'united', 'virginatlantic', 'southwest'],
   'American Express': ['aeroplan', 'delta', 'emirates', 'etihad', 'flyingblue', 'jetblue', 'qantas', 'singapore', 'virginatlantic'],
   'Amex': ['aeroplan', 'delta', 'emirates', 'etihad', 'flyingblue', 'jetblue', 'qantas', 'singapore', 'virginatlantic'],
-  'Capital One': ['aeroplan', 'emirates', 'etihad', 'finnair', 'flyingblue', 'qantas', 'singapore', 'turkish', 'virginatlantic'],
+  'Capital One': ['aeroplan', 'emirates', 'etihad', 'eurobonus', 'finnair', 'flyingblue', 'qantas', 'singapore', 'turkish', 'virginatlantic'],
   'Citi': ['aeroplan', 'emirates', 'etihad', 'flyingblue', 'jetblue', 'qantas', 'qatar', 'singapore', 'turkish', 'virginatlantic'],
   'Bilt': ['aeroplan', 'alaska', 'american', 'emirates', 'flyingblue', 'turkish', 'united', 'virginatlantic'],
   'US Bank': ['aeroplan', 'flyingblue', 'virginatlantic'],

@@ -1169,6 +1169,59 @@ input:focus, select:focus {
   font-size: 0.75rem;
 }
 
+/* Segment fare class */
+.segment-fareclass {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* Operating airlines in cabin pill */
+.cabin-airlines {
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  font-style: italic;
+}
+
+/* Alliance cost display */
+.trip-alliance-cost {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+/* API quota badge */
+.award-search-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.api-quota {
+  flex-shrink: 0;
+}
+
+.quota-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.quota-badge.quota-low {
+  background: #fef2f2;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
 /* Transfer partner highlighting */
 .award-result-card.transferable {
   border-left: 3px solid var(--success);

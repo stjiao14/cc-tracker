@@ -1,9 +1,13 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import BenefitsTab from './BenefitsTab'
 import SignUpBonusTab from './SignUpBonusTab'
 
 export default function CardDetail({ card, onBack, onEdit }) {
   const [tab, setTab] = useState('benefits')
+
+  useEffect(() => {
+    setTab('benefits')
+  }, [card.id])
 
   return (
     <div className="card-detail">

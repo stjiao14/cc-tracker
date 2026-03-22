@@ -16,6 +16,7 @@ export default function App() {
   const [selectedCardId, setSelectedCardId] = useState(null)
   const [editingCard, setEditingCard] = useState(null)
   const [showForm, setShowForm] = useState(false)
+  const [formKey, setFormKey] = useState(0)
 
   const selectedCard = cards.find(c => c.id === selectedCardId)
 
@@ -56,6 +57,7 @@ export default function App() {
 
   const handleAddCard = () => {
     setEditingCard(null)
+    setFormKey(k => k + 1)
     setShowForm(true)
   }
 
@@ -63,6 +65,7 @@ export default function App() {
     return (
       <div className="app">
         <CardForm
+          key={editingCard?.id || formKey}
           card={editingCard}
           onSave={handleSaveCard}
           onCancel={() => { setShowForm(false); setEditingCard(null) }}

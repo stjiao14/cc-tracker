@@ -1,10 +1,27 @@
-import { useState } from 'react'
-import { cachedSearch, getTrips, CABIN_OPTIONS, SOURCES, isApiKeyConfigured } from '../services/seatsAero'
+import { useState, useEffect } from 'react'
+import { cachedSearch, getTrips, CABIN_OPTIONS, SOURCES, isApiKeyConfigured, getApiQuota } from '../services/seatsAero'
 import { formatDate } from '../utils/helpers'
+import { getTransferablePrograms } from '../utils/transferPartners'
 
-const AIRPORT_CODE_RE = /^[A-Z]{3}$/
+const AIRPORT_RE = /^[A-Z]{3}(,[A-Z]{3})*$/
 
-export default function AwardSearch() {
+function parseAirports(raw) {
+  return raw.toUpperCase().replace(/\s/g, '').trim()
+}
+
+const SAVED_SEARCHES_KEY = 'cc-tracker-saved-searches'
+
+function loadSavedSearches() {
+  try {
+    return JSON.parse(localStorage.getItem(SAVED_SEARCHES_KEY)) || []
+  } catch { return [] }
+}
+
+function persistSavedSearches(searches) {
+  localStorage.setItem(SAVED_SEARCHES_KEY, JSON.stringify(searches))
+}
+
+export default function AwardSearch({ cards = [] }) {
   const [form, setForm] = useState({
     origin: '',
     destination: '',
@@ -22,8 +39,20 @@ export default function AwardSearch() {
   const [expandedTrip, setExpandedTrip] = useState(null)
   const [tripDetails, setTripDetails] = useState({})
   const [tripLoading, setTripLoading] = useState(null)
+  const [savedSearches, setSavedSearches] = useState(loadSavedSearches)
+  const [quota, setQuota] = useState(null)
 
   const apiReady = isApiKeyConfigured()
+  const transferable = getTransferablePrograms(cards)
+
+  useEffect(() => {
+    persistSavedSearches(savedSearches)
+  }, [savedSearches])
+
+  const refreshQuota = () => {
+    const q = getApiQuota()
+    if (q) setQuota(q)
+  }
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
@@ -31,8 +60,8 @@ export default function AwardSearch() {
   }
 
   const buildSearchParams = () => {
-    const origin = form.origin.toUpperCase().trim()
-    const destination = form.destination.toUpperCase().trim()
+    const origin = parseAirports(form.origin)
+    const destination = parseAirports(form.destination)
     return {
       origin,
       destination,
@@ -48,8 +77,8 @@ export default function AwardSearch() {
   const handleSearch = async (e) => {
     e.preventDefault()
     const params = buildSearchParams()
-    if (!AIRPORT_CODE_RE.test(params.origin) || !AIRPORT_CODE_RE.test(params.destination)) {
-      setError('Please enter valid 3-letter airport codes (e.g. SFO, NRT).')
+    if (!AIRPORT_RE.test(params.origin) || !AIRPORT_RE.test(params.destination)) {
+      setError('Enter valid 3-letter airport codes. Use commas for multiple (e.g. SFO,LAX).')
       return
     }
     setLoading(true)
@@ -57,10 +86,12 @@ export default function AwardSearch() {
     setResults(null)
     setExpandedTrip(null)
     try {
-      const data = await cachedSearch(params)
+      const data = await cachedSearch({ ...params, includeTrips: true })
       setResults(data)
+      refreshQuota()
     } catch (err) {
       setError(err.message)
+      refreshQuota()
     } finally {
       setLoading(false)
     }
@@ -71,12 +102,13 @@ export default function AwardSearch() {
     setLoadingMore(true)
     try {
       const params = buildSearchParams()
-      const data = await cachedSearch({ ...params, cursor: results.cursor })
+      const data = await cachedSearch({ ...params, cursor: results.cursor, includeTrips: true })
       setResults(prev => ({
         ...data,
         data: [...(prev?.data || []), ...(data.data || [])],
         count: (prev?.count || 0) + (data.count || 0),
       }))
+      refreshQuota()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -84,18 +116,52 @@ export default function AwardSearch() {
     }
   }
 
-  const handleViewTrips = async (availabilityId) => {
+  const handleSaveSearch = () => {
+    const params = buildSearchParams()
+    if (!AIRPORT_RE.test(params.origin) || !AIRPORT_RE.test(params.destination)) return
+    const label = `${params.origin} → ${params.destination} (${form.cabin})`
+    const entry = { ...form, id: Date.now(), label }
+    setSavedSearches(prev => [entry, ...prev.slice(0, 9)])
+  }
+
+  const handleLoadSaved = (saved) => {
+    setForm({
+      origin: saved.origin,
+      destination: saved.destination,
+      cabin: saved.cabin,
+      startDate: saved.startDate || '',
+      endDate: saved.endDate || '',
+      source: saved.source || '',
+      directOnly: saved.directOnly || false,
+      orderBy: saved.orderBy || '',
+    })
+  }
+
+  const handleRemoveSaved = (id) => {
+    setSavedSearches(prev => prev.filter(s => s.id !== id))
+  }
+
+  const handleViewTrips = async (availabilityId, inlineTrips) => {
     if (expandedTrip === availabilityId) {
       setExpandedTrip(null)
       return
     }
     setExpandedTrip(availabilityId)
+
+    // If we already have trip details (from inline or previous fetch), skip
     if (tripDetails[availabilityId]) return
+
+    // Use inline trips from include_trips if available
+    if (inlineTrips) {
+      setTripDetails(prev => ({ ...prev, [availabilityId]: inlineTrips }))
+      return
+    }
 
     setTripLoading(availabilityId)
     try {
       const data = await getTrips(availabilityId)
       setTripDetails(prev => ({ ...prev, [availabilityId]: data }))
+      refreshQuota()
     } catch (err) {
       setTripDetails(prev => ({ ...prev, [availabilityId]: { error: err.message } }))
     } finally {
@@ -105,31 +171,61 @@ export default function AwardSearch() {
 
   const getCabinAvailability = (row) => {
     const cabins = []
-    if (row.YAvailable) cabins.push({ cabin: 'Y', miles: row.YMileageCost, seats: row.YRemainingSeats, taxes: row.YTotalTaxes })
-    if (row.WAvailable) cabins.push({ cabin: 'W', miles: row.WMileageCost, seats: row.WRemainingSeats, taxes: row.WTotalTaxes })
-    if (row.JAvailable) cabins.push({ cabin: 'J', miles: row.JMileageCost, seats: row.JRemainingSeats, taxes: row.JTotalTaxes })
-    if (row.FAvailable) cabins.push({ cabin: 'F', miles: row.FMileageCost, seats: row.FRemainingSeats, taxes: row.FTotalTaxes })
+    if (row.YAvailable) cabins.push({ cabin: 'Y', miles: row.YMileageCost, seats: row.YRemainingSeats, taxes: row.YTotalTaxes, airlines: row.YAirlines })
+    if (row.WAvailable) cabins.push({ cabin: 'W', miles: row.WMileageCost, seats: row.WRemainingSeats, taxes: row.WTotalTaxes, airlines: row.WAirlines })
+    if (row.JAvailable) cabins.push({ cabin: 'J', miles: row.JMileageCost, seats: row.JRemainingSeats, taxes: row.JTotalTaxes, airlines: row.JAirlines })
+    if (row.FAvailable) cabins.push({ cabin: 'F', miles: row.FMileageCost, seats: row.FRemainingSeats, taxes: row.FTotalTaxes, airlines: row.FAirlines })
     return cabins
   }
 
   const cabinLabel = { Y: 'Economy', W: 'Prem Econ', J: 'Business', F: 'First' }
-
   const formatMiles = (n) => n != null ? Number(n).toLocaleString() : '—'
-
   const formatTaxes = (cents, currency) => {
     if (!cents) return null
     const amount = (cents / 100).toFixed(0)
     return currency === 'USD' ? `$${amount}` : `${amount} ${currency || ''}`
   }
 
+  const calcCPM = (miles, taxCents) => {
+    if (!miles || !taxCents) return null
+    return (taxCents / miles).toFixed(2)
+  }
+
+  const isTransferable = (source) => transferable.has(source?.toLowerCase())
+
   return (
     <div>
-      <h2>Award Search</h2>
-      <p className="section-desc">Search award flight availability across mileage programs via Seats.aero</p>
+      <div className="award-search-header">
+        <div>
+          <h2>Award Search</h2>
+          <p className="section-desc">Search award flight availability across mileage programs via Seats.aero</p>
+        </div>
+        {quota && (
+          <div className="api-quota">
+            <span className={`quota-badge ${quota.remaining < 10 ? 'quota-low' : ''}`}>
+              API: {quota.remaining} calls left today
+            </span>
+          </div>
+        )}
+      </div>
 
       {!apiReady && (
         <div className="award-error">
           Seats.aero API key is not configured. Add <code>VITE_SEATS_AERO_API_KEY</code> to your <code>.env</code> file and restart the dev server.
+        </div>
+      )}
+
+      {savedSearches.length > 0 && (
+        <div className="saved-searches">
+          <h4 className="saved-searches-title">Saved Searches</h4>
+          <div className="saved-searches-list">
+            {savedSearches.map(s => (
+              <div key={s.id} className="saved-search-chip">
+                <button className="saved-search-btn" onClick={() => handleLoadSaved(s)}>{s.label}</button>
+                <button className="saved-search-remove" onClick={() => handleRemoveSaved(s.id)} title="Remove">×</button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -139,10 +235,9 @@ export default function AwardSearch() {
             Origin
             <input
               name="origin"
-              placeholder="SFO"
+              placeholder="SFO or SFO,LAX"
               value={form.origin}
               onChange={handleChange}
-              maxLength={3}
               required
             />
           </label>
@@ -150,10 +245,9 @@ export default function AwardSearch() {
             Destination
             <input
               name="destination"
-              placeholder="NRT"
+              placeholder="NRT or NRT,HND"
               value={form.destination}
               onChange={handleChange}
-              maxLength={3}
               required
             />
           </label>
@@ -170,7 +264,9 @@ export default function AwardSearch() {
             <select name="source" value={form.source} onChange={handleChange}>
               <option value="">All Programs</option>
               {SOURCES.map(s => (
-                <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                <option key={s} value={s}>
+                  {s.charAt(0).toUpperCase() + s.slice(1)}{transferable.has(s) ? ' ★' : ''}
+                </option>
               ))}
             </select>
           </label>
@@ -195,11 +291,16 @@ export default function AwardSearch() {
               <option value="price">Price (lowest first)</option>
             </select>
           </label>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={handleSaveSearch}>Save Search</button>
         </div>
         <button type="submit" className="btn btn-primary award-search-btn" disabled={loading || !apiReady}>
           {loading ? 'Searching...' : 'Search Awards'}
         </button>
       </form>
+
+      {transferable.size > 0 && (
+        <p className="transfer-hint">★ = transferable from your credit card points</p>
+      )}
 
       {error && <div className="award-error">{error}</div>}
 
@@ -213,8 +314,8 @@ export default function AwardSearch() {
           {results.data && results.data.length > 0 ? (
             <div className="award-results-list">
               {results.data.map((row) => (
-                <div key={row.ID} className={`award-result-card ${expandedTrip === row.ID ? 'expanded' : ''}`}>
-                  <div className="award-result-clickable" onClick={() => handleViewTrips(row.ID)} role="button" tabIndex={0}>
+                <div key={row.ID} className={`award-result-card ${expandedTrip === row.ID ? 'expanded' : ''} ${isTransferable(row.Source) ? 'transferable' : ''}`}>
+                  <div className="award-result-clickable" onClick={() => handleViewTrips(row.ID, row.AvailabilityTrips)} role="button" tabIndex={0}>
                     <div className="award-result-route">
                       <div className="award-route-airports">
                         <span className="airport-code">{row.Route?.OriginAirport}</span>
@@ -226,22 +327,29 @@ export default function AwardSearch() {
                       </div>
                       <div className="award-route-meta">
                         <span className="tag">{formatDate(row.Date)}</span>
-                        <span className="tag tag-blue">{row.Source}</span>
+                        <span className={`tag ${isTransferable(row.Source) ? 'tag-green' : 'tag-blue'}`}>
+                          {row.Source}{isTransferable(row.Source) ? ' ★' : ''}
+                        </span>
                         <span className={`expand-arrow ${expandedTrip === row.ID ? 'expanded' : ''}`}>▼</span>
                       </div>
                     </div>
 
                     <div className="award-cabins">
-                      {getCabinAvailability(row).map(c => (
-                        <div key={c.cabin} className="award-cabin-pill">
-                          <span className="cabin-label">{cabinLabel[c.cabin]}</span>
-                          <span className="cabin-miles">{formatMiles(c.miles)} mi</span>
-                          {c.taxes > 0 && (
-                            <span className="cabin-taxes">+ {formatTaxes(c.taxes, row.TaxesCurrency)}</span>
-                          )}
-                          <span className="cabin-seats">{c.seats} seat{c.seats !== 1 ? 's' : ''}</span>
-                        </div>
-                      ))}
+                      {getCabinAvailability(row).map(c => {
+                        const cpm = calcCPM(c.miles, c.taxes)
+                        return (
+                          <div key={c.cabin} className="award-cabin-pill">
+                            <span className="cabin-label">{cabinLabel[c.cabin]}</span>
+                            <span className="cabin-miles">{formatMiles(c.miles)} mi</span>
+                            {c.taxes > 0 && (
+                              <span className="cabin-taxes">+ {formatTaxes(c.taxes, row.TaxesCurrency)}</span>
+                            )}
+                            {cpm && <span className="cabin-cpm">{cpm} cpp</span>}
+                            {c.airlines && <span className="cabin-airlines">{c.airlines}</span>}
+                            <span className="cabin-seats">{c.seats} seat{c.seats !== 1 ? 's' : ''}</span>
+                          </div>
+                        )
+                      })}
                       {getCabinAvailability(row).length === 0 && (
                         <span className="empty-text">No cabin availability</span>
                       )}
@@ -259,6 +367,9 @@ export default function AwardSearch() {
                           <div className="trip-header">
                             <span className="tag tag-green">{trip.Cabin}</span>
                             <span>{formatMiles(trip.MileageCost)} miles</span>
+                            {trip.AllianceCost > 0 && trip.AllianceCost !== trip.MileageCost && (
+                              <span className="trip-alliance-cost">({formatMiles(trip.AllianceCost)} alliance)</span>
+                            )}
                             {trip.TotalTaxes > 0 && (
                               <span className="trip-taxes">+ {formatTaxes(trip.TotalTaxes, trip.TaxesCurrency)}</span>
                             )}
@@ -271,6 +382,9 @@ export default function AwardSearch() {
                               <span className="segment-flight">{seg.FlightNumber}</span>
                               <span>{seg.OriginAirport} → {seg.DestinationAirport}</span>
                               <span className="segment-aircraft">{seg.AircraftName || seg.AircraftCode}</span>
+                              {seg.FareClass && (
+                                <span className="segment-fareclass">{seg.FareClass}</span>
+                              )}
                               {seg.DepartsAt && (
                                 <span className="segment-time">
                                   {new Date(seg.DepartsAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}

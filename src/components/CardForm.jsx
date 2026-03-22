@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NETWORKS, CARD_COLORS, SPEND_CATEGORIES, generateId, createEmptyCard } from '../utils/helpers'
 
 export default function CardForm({ card, onSave, onCancel, onDelete }) {
-  const [form, setForm] = useState(card || createEmptyCard())
+  const [form, setForm] = useState(() => card || createEmptyCard())
 
   const update = (field, value) => setForm(prev => ({ ...prev, [field]: value }))
   const updateNested = (parent, field, value) =>

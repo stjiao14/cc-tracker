@@ -1168,3 +1168,137 @@ input:focus, select:focus {
   color: var(--text-secondary);
   font-size: 0.75rem;
 }
+
+/* Segment fare class */
+.segment-fareclass {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* Operating airlines in cabin pill */
+.cabin-airlines {
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  font-style: italic;
+}
+
+/* Alliance cost display */
+.trip-alliance-cost {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+/* API quota badge */
+.award-search-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.api-quota {
+  flex-shrink: 0;
+}
+
+.quota-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.quota-badge.quota-low {
+  background: #fef2f2;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* Transfer partner highlighting */
+.award-result-card.transferable {
+  border-left: 3px solid var(--success);
+}
+
+.transfer-hint {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin: 8px 0;
+}
+
+/* Cents per mile */
+.cabin-cpm {
+  color: var(--primary);
+  font-size: 0.7rem;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+/* Saved searches */
+.saved-searches {
+  margin-bottom: 16px;
+}
+
+.saved-searches-title {
+  margin: 0 0 8px 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.saved-searches-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.saved-search-chip {
+  display: flex;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.saved-search-btn {
+  background: none;
+  border: none;
+  padding: 5px 10px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.saved-search-btn:hover {
+  background: var(--bg);
+}
+
+.saved-search-remove {
+  background: none;
+  border: none;
+  border-left: 1px solid var(--border);
+  padding: 5px 8px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.saved-search-remove:hover {
+  background: #fef2f2;
+  color: var(--danger);
+}
+
+.btn-sm {
+  font-size: 0.8rem;
+  padding: 4px 10px;
+}

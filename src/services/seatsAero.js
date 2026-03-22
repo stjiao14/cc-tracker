@@ -32,9 +32,16 @@ function buildUrl(endpoint, params = {}) {
   return `https://corsproxy.io/?${encodeURIComponent(target.toString())}`
 }
 
-// API quota tracking from response headers
+// API quota tracking from response headers + local call counting fallback
 let apiQuota = null
-export function getApiQuota() { return apiQuota }
+let sessionCallCount = 0
+export function getApiQuota() {
+  // If we have real quota from headers, use it
+  if (apiQuota) return apiQuota
+  // Otherwise return session call count as fallback
+  if (sessionCallCount > 0) return { used: sessionCallCount, ts: Date.now() }
+  return null
+}
 
 // Session cache: key → { data, ts }
 const sessionCache = {}
@@ -79,11 +86,12 @@ async function apiRequest(endpoint, params = {}, { retries = 3, useCache = false
         headers: { 'Partner-Authorization': apiKey },
       })
 
-      // Read API quota from response headers
+      // Read API quota from response headers (may not be available through CORS proxy)
       const remaining = res.headers.get('x-ratelimit-remaining')
       if (remaining != null) {
         apiQuota = { remaining: Number(remaining), ts: Date.now() }
       }
+      sessionCallCount++
 
       if (!res.ok) {
         if (isTransientError(res.status) && attempt < retries) {
@@ -103,7 +111,7 @@ async function apiRequest(endpoint, params = {}, { retries = 3, useCache = false
           throw new Error('Invalid or expired Seats.aero API key. Check your key in Settings.')
         }
         if (res.status === 429) {
-          throw new Error('Rate limit exceeded. Please wait a moment and try again.')
+          throw new Error('Daily API limit reached (1,000 calls/day). Your quota resets at midnight UTC.')
         }
         throw new Error(`Seats.aero API error ${res.status}: ${message}`)
       }
@@ -173,12 +181,23 @@ export async function getRoutes(source) {
   return apiRequest('/routes', { source }, { useCache: true })
 }
 
+// Note: the API only accepts economy/business/first as cabin filters.
+// 'premium' is not a valid API filter, but Premium Economy (W) availability
+// still appears in results. We track it here so the UI can show it as an option,
+// and filter it out before sending to the API.
 export const CABIN_OPTIONS = [
   { value: 'economy', label: 'Economy' },
   { value: 'premium', label: 'Premium Economy' },
   { value: 'business', label: 'Business' },
   { value: 'first', label: 'First' },
 ]
+
+// Cabin values the API actually accepts as filter params
+const VALID_API_CABINS = new Set(['economy', 'business', 'first'])
+
+export function toApiCabin(cabin) {
+  return VALID_API_CABINS.has(cabin) ? cabin : undefined
+}
 
 export const SOURCES = [
   'aeroplan', 'alaska', 'american', 'aeromexico', 'azul', 'copa',

@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { getAvailability, getTrips, CABIN_OPTIONS, SOURCES, REGIONS, isApiKeyConfigured, getApiQuota } from '../services/seatsAero'
+import { getAvailability, getTrips, CABIN_OPTIONS, SOURCES, REGIONS, isApiKeyConfigured, getApiQuota, toApiCabin } from '../services/seatsAero'
 import { formatDate } from '../utils/helpers'
 import { getTransferablePrograms } from '../utils/transferPartners'
+import { getCabinAvailability, CABIN_LABELS, formatMiles, formatTaxes, calcCPM } from '../utils/awardHelpers'
 
 export default function DealsExplorer({ cards = [] }) {
   const [form, setForm] = useState({
@@ -36,7 +37,7 @@ export default function DealsExplorer({ cards = [] }) {
 
   const buildParams = () => ({
     source: form.source,
-    cabin: form.cabin,
+    cabin: toApiCabin(form.cabin),
     startDate: form.startDate || undefined,
     endDate: form.endDate || undefined,
     originRegion: form.originRegion || undefined,
@@ -103,27 +104,6 @@ export default function DealsExplorer({ cards = [] }) {
     }
   }
 
-  const getCabinAvailability = (row) => {
-    const cabins = []
-    if (row.YAvailable) cabins.push({ cabin: 'Y', miles: row.YMileageCost, seats: row.YRemainingSeats, taxes: row.YTotalTaxes, airlines: row.YAirlines })
-    if (row.WAvailable) cabins.push({ cabin: 'W', miles: row.WMileageCost, seats: row.WRemainingSeats, taxes: row.WTotalTaxes, airlines: row.WAirlines })
-    if (row.JAvailable) cabins.push({ cabin: 'J', miles: row.JMileageCost, seats: row.JRemainingSeats, taxes: row.JTotalTaxes, airlines: row.JAirlines })
-    if (row.FAvailable) cabins.push({ cabin: 'F', miles: row.FMileageCost, seats: row.FRemainingSeats, taxes: row.FTotalTaxes, airlines: row.FAirlines })
-    return cabins
-  }
-
-  const cabinLabel = { Y: 'Economy', W: 'Prem Econ', J: 'Business', F: 'First' }
-  const formatMiles = (n) => n != null ? Number(n).toLocaleString() : '—'
-  const formatTaxes = (cents, currency) => {
-    if (!cents) return null
-    const amount = (cents / 100).toFixed(0)
-    return currency === 'USD' ? `$${amount}` : `${amount} ${currency || ''}`
-  }
-  const calcCPM = (miles, taxCents) => {
-    if (!miles || !taxCents) return null
-    return (taxCents / miles).toFixed(2)
-  }
-
   return (
     <div>
       <div className="award-search-header">
@@ -133,8 +113,10 @@ export default function DealsExplorer({ cards = [] }) {
         </div>
         {quota && (
           <div className="api-quota">
-            <span className={`quota-badge ${quota.remaining < 10 ? 'quota-low' : ''}`}>
-              API: {quota.remaining} calls left today
+            <span className={`quota-badge ${quota.remaining != null && quota.remaining < 10 ? 'quota-low' : ''}`}>
+              {quota.remaining != null
+                ? `API: ${quota.remaining} calls left today`
+                : `API: ${quota.used} calls this session`}
             </span>
           </div>
         )}
@@ -203,7 +185,7 @@ export default function DealsExplorer({ cards = [] }) {
         <div className="award-results">
           <div className="award-results-header">
             <h3>{results.count || 0} deal{results.count !== 1 ? 's' : ''} found</h3>
-            {results.hasMore && <span className="tag tag-blue">More available</span>}
+            {(results.hasMore || results.cursor) && <span className="tag tag-blue">More available</span>}
           </div>
 
           {results.data && results.data.length > 0 ? (
@@ -237,7 +219,7 @@ export default function DealsExplorer({ cards = [] }) {
                         const cpm = calcCPM(c.miles, c.taxes)
                         return (
                           <div key={c.cabin} className="award-cabin-pill">
-                            <span className="cabin-label">{cabinLabel[c.cabin]}</span>
+                            <span className="cabin-label">{CABIN_LABELS[c.cabin]}</span>
                             <span className="cabin-miles">{formatMiles(c.miles)} mi</span>
                             {c.taxes > 0 && (
                               <span className="cabin-taxes">+ {formatTaxes(c.taxes, row.TaxesCurrency)}</span>
@@ -321,7 +303,7 @@ export default function DealsExplorer({ cards = [] }) {
             </div>
           )}
 
-          {results.hasMore && (
+          {(results.hasMore || results.cursor) && (
             <button
               className="btn btn-secondary award-search-btn"
               onClick={handleLoadMore}

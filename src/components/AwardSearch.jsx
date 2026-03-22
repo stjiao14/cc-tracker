@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { cachedSearch, getTrips, CABIN_OPTIONS, SOURCES, isApiKeyConfigured, getApiQuota } from '../services/seatsAero'
+import { cachedSearch, getTrips, CABIN_OPTIONS, SOURCES, isApiKeyConfigured, getApiQuota, toApiCabin } from '../services/seatsAero'
 import { formatDate } from '../utils/helpers'
 import { getTransferablePrograms } from '../utils/transferPartners'
+import { getCabinAvailability, CABIN_LABELS, formatMiles, formatTaxes, calcCPM } from '../utils/awardHelpers'
 
 const AIRPORT_RE = /^[A-Z]{3}(,[A-Z]{3})*$/
 
@@ -65,7 +66,7 @@ export default function AwardSearch({ cards = [] }) {
     return {
       origin,
       destination,
-      cabin: form.cabin,
+      cabin: toApiCabin(form.cabin),
       startDate: form.startDate,
       endDate: form.endDate,
       source: form.source || undefined,
@@ -148,13 +149,15 @@ export default function AwardSearch({ cards = [] }) {
     }
     setExpandedTrip(availabilityId)
 
-    // If we already have trip details (from inline or previous fetch), skip
-    if (tripDetails[availabilityId]) return
+    // If we already have full trip details (with booking links), skip
+    const existing = tripDetails[availabilityId]
+    if (existing && (existing.booking_links || existing.BookingLinks)) return
 
-    // Use inline trips from include_trips if available
-    if (inlineTrips) {
-      setTripDetails(prev => ({ ...prev, [availabilityId]: inlineTrips }))
-      return
+    // Use inline trips immediately for fast display, then fetch full details
+    // for booking links (which are only available via /trips/{id})
+    if (inlineTrips && !existing) {
+      const normalized = Array.isArray(inlineTrips) ? { data: inlineTrips } : inlineTrips
+      setTripDetails(prev => ({ ...prev, [availabilityId]: normalized }))
     }
 
     setTripLoading(availabilityId)
@@ -163,32 +166,13 @@ export default function AwardSearch({ cards = [] }) {
       setTripDetails(prev => ({ ...prev, [availabilityId]: data }))
       refreshQuota()
     } catch (err) {
-      setTripDetails(prev => ({ ...prev, [availabilityId]: { error: err.message } }))
+      // If we already have inline trips displayed, don't overwrite with error
+      if (!tripDetails[availabilityId] && !inlineTrips) {
+        setTripDetails(prev => ({ ...prev, [availabilityId]: { error: err.message } }))
+      }
     } finally {
       setTripLoading(null)
     }
-  }
-
-  const getCabinAvailability = (row) => {
-    const cabins = []
-    if (row.YAvailable) cabins.push({ cabin: 'Y', miles: row.YMileageCost, seats: row.YRemainingSeats, taxes: row.YTotalTaxes, airlines: row.YAirlines })
-    if (row.WAvailable) cabins.push({ cabin: 'W', miles: row.WMileageCost, seats: row.WRemainingSeats, taxes: row.WTotalTaxes, airlines: row.WAirlines })
-    if (row.JAvailable) cabins.push({ cabin: 'J', miles: row.JMileageCost, seats: row.JRemainingSeats, taxes: row.JTotalTaxes, airlines: row.JAirlines })
-    if (row.FAvailable) cabins.push({ cabin: 'F', miles: row.FMileageCost, seats: row.FRemainingSeats, taxes: row.FTotalTaxes, airlines: row.FAirlines })
-    return cabins
-  }
-
-  const cabinLabel = { Y: 'Economy', W: 'Prem Econ', J: 'Business', F: 'First' }
-  const formatMiles = (n) => n != null ? Number(n).toLocaleString() : '—'
-  const formatTaxes = (cents, currency) => {
-    if (!cents) return null
-    const amount = (cents / 100).toFixed(0)
-    return currency === 'USD' ? `$${amount}` : `${amount} ${currency || ''}`
-  }
-
-  const calcCPM = (miles, taxCents) => {
-    if (!miles || !taxCents) return null
-    return (taxCents / miles).toFixed(2)
   }
 
   const isTransferable = (source) => transferable.has(source?.toLowerCase())
@@ -202,8 +186,10 @@ export default function AwardSearch({ cards = [] }) {
         </div>
         {quota && (
           <div className="api-quota">
-            <span className={`quota-badge ${quota.remaining < 10 ? 'quota-low' : ''}`}>
-              API: {quota.remaining} calls left today
+            <span className={`quota-badge ${quota.remaining != null && quota.remaining < 10 ? 'quota-low' : ''}`}>
+              {quota.remaining != null
+                ? `API: ${quota.remaining} calls left today`
+                : `API: ${quota.used} calls this session`}
             </span>
           </div>
         )}
@@ -308,7 +294,7 @@ export default function AwardSearch({ cards = [] }) {
         <div className="award-results">
           <div className="award-results-header">
             <h3>{results.count || 0} result{results.count !== 1 ? 's' : ''} found</h3>
-            {results.hasMore && <span className="tag tag-blue">More available</span>}
+            {(results.hasMore || results.cursor) && <span className="tag tag-blue">More available</span>}
           </div>
 
           {results.data && results.data.length > 0 ? (
@@ -339,7 +325,7 @@ export default function AwardSearch({ cards = [] }) {
                         const cpm = calcCPM(c.miles, c.taxes)
                         return (
                           <div key={c.cabin} className="award-cabin-pill">
-                            <span className="cabin-label">{cabinLabel[c.cabin]}</span>
+                            <span className="cabin-label">{CABIN_LABELS[c.cabin]}</span>
                             <span className="cabin-miles">{formatMiles(c.miles)} mi</span>
                             {c.taxes > 0 && (
                               <span className="cabin-taxes">+ {formatTaxes(c.taxes, row.TaxesCurrency)}</span>
@@ -426,7 +412,7 @@ export default function AwardSearch({ cards = [] }) {
             </div>
           )}
 
-          {results.hasMore && (
+          {(results.hasMore || results.cursor) && (
             <button
               className="btn btn-secondary award-search-btn"
               onClick={handleLoadMore}

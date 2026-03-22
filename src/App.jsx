@@ -9,6 +9,7 @@ import AnnualFeeTracker from './components/AnnualFeeTracker'
 import AwardSearch from './components/AwardSearch'
 import DealsExplorer from './components/DealsExplorer'
 import RouteBrowser from './components/RouteBrowser'
+import Settings from './components/Settings'
 
 export default function App() {
   const [cards, setCards] = useLocalStorage('cc-tracker-cards', [])
@@ -136,6 +137,14 @@ export default function App() {
               Route Browser
             </button>
           </li>
+          <li>
+            <button
+              className={view === 'settings' ? 'active' : ''}
+              onClick={() => { setView('settings'); setSelectedCardId(null) }}
+            >
+              Settings
+            </button>
+          </li>
         </ul>
       </nav>
 
@@ -171,6 +180,9 @@ export default function App() {
         )}
         {view === 'routes' && (
           <RouteBrowser />
+        )}
+        {view === 'settings' && (
+          <Settings />
         )}
       </main>
     </div>

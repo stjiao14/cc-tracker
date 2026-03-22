@@ -6,10 +6,17 @@ const API_KEY_STORAGE_KEY = 'cc-tracker-seats-aero-api-key'
 export default function Settings() {
   const [key, setKey] = useState(() => localStorage.getItem(API_KEY_STORAGE_KEY) || '')
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState(null)
   const [masked, setMasked] = useState(true)
 
   const handleSave = () => {
-    setApiKey(key)
+    const trimmed = key.trim()
+    if (trimmed && !trimmed.startsWith('pro_')) {
+      setSaveError('API key should start with "pro_". Check your key and try again.')
+      return
+    }
+    setSaveError(null)
+    setApiKey(trimmed)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -35,7 +42,7 @@ export default function Settings() {
           <input
             type={masked ? 'password' : 'text'}
             value={key}
-            onChange={e => { setKey(e.target.value); setSaved(false) }}
+            onChange={e => { setKey(e.target.value); setSaved(false); setSaveError(null) }}
             placeholder="Enter your Seats.aero API key"
             className="settings-key-input"
           />
@@ -55,6 +62,7 @@ export default function Settings() {
             Clear Key
           </button>
           {saved && <span className="settings-saved">Saved!</span>}
+          {saveError && <span className="settings-error" style={{ color: '#ef4444' }}>{saveError}</span>}
         </div>
         <div className="settings-key-status">
           Status: {isApiKeyConfigured()

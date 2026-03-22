@@ -1,8 +1,20 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { getAvailability, getTrips, CABIN_OPTIONS, SOURCES, REGIONS, isApiKeyConfigured, getApiQuota, toApiCabin } from '../services/seatsAero'
 import { formatDate } from '../utils/helpers'
 import { getTransferablePrograms } from '../utils/transferPartners'
 import { getCabinAvailability, CABIN_LABELS, formatMiles, formatTaxes, calcCPM } from '../utils/awardHelpers'
+
+const SAVED_DEALS_KEY = 'cc-tracker-saved-deals'
+
+function loadSavedSearches() {
+  try {
+    return JSON.parse(localStorage.getItem(SAVED_DEALS_KEY)) || []
+  } catch { return [] }
+}
+
+function persistSavedSearches(searches) {
+  localStorage.setItem(SAVED_DEALS_KEY, JSON.stringify(searches))
+}
 
 export default function DealsExplorer({ cards = [] }) {
   const [form, setForm] = useState({
@@ -21,10 +33,15 @@ export default function DealsExplorer({ cards = [] }) {
   const [tripDetails, setTripDetails] = useState({})
   const [tripLoading, setTripLoading] = useState(null)
   const [quota, setQuota] = useState(null)
+  const [savedSearches, setSavedSearches] = useState(loadSavedSearches)
 
   const apiReady = isApiKeyConfigured()
   const transferable = getTransferablePrograms(cards)
   const isTransferable = (source) => transferable.has(source?.toLowerCase())
+
+  useEffect(() => {
+    persistSavedSearches(savedSearches)
+  }, [savedSearches])
 
   const refreshQuota = () => {
     const q = getApiQuota()
@@ -104,6 +121,31 @@ export default function DealsExplorer({ cards = [] }) {
     }
   }
 
+  const handleSaveSearch = () => {
+    if (!form.source) return
+    const parts = [form.source.charAt(0).toUpperCase() + form.source.slice(1), form.cabin]
+    if (form.originRegion) parts.push(form.originRegion)
+    if (form.destinationRegion) parts.push('→ ' + form.destinationRegion)
+    const label = parts.join(' · ')
+    const entry = { ...form, id: Date.now(), label }
+    setSavedSearches(prev => [entry, ...prev.slice(0, 9)])
+  }
+
+  const handleLoadSaved = (saved) => {
+    setForm({
+      source: saved.source || '',
+      cabin: saved.cabin || 'business',
+      startDate: saved.startDate || '',
+      endDate: saved.endDate || '',
+      originRegion: saved.originRegion || '',
+      destinationRegion: saved.destinationRegion || '',
+    })
+  }
+
+  const handleRemoveSaved = (id) => {
+    setSavedSearches(prev => prev.filter(s => s.id !== id))
+  }
+
   return (
     <div>
       <div className="award-search-header">
@@ -125,6 +167,20 @@ export default function DealsExplorer({ cards = [] }) {
       {!apiReady && (
         <div className="award-error">
           Seats.aero API key is not configured. Add your API key in <strong>Settings</strong>.
+        </div>
+      )}
+
+      {savedSearches.length > 0 && (
+        <div className="saved-searches">
+          <h4 className="saved-searches-title">Saved Searches</h4>
+          <div className="saved-searches-list">
+            {savedSearches.map(s => (
+              <div key={s.id} className="saved-search-chip">
+                <button className="saved-search-btn" onClick={() => handleLoadSaved(s)}>{s.label}</button>
+                <button className="saved-search-remove" onClick={() => handleRemoveSaved(s.id)} title="Remove">×</button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -173,6 +229,9 @@ export default function DealsExplorer({ cards = [] }) {
             End Date
             <input type="date" name="endDate" value={form.endDate} onChange={handleChange} />
           </label>
+        </div>
+        <div className="award-form-options">
+          <button type="button" className="btn btn-secondary btn-sm" onClick={handleSaveSearch} disabled={!form.source}>Save Search</button>
         </div>
         <button type="submit" className="btn btn-primary award-search-btn" disabled={loading || !apiReady || !form.source}>
           {loading ? 'Searching...' : 'Browse Deals'}

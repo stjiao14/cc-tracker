@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { getAvailability, getTrips, CABIN_OPTIONS, SOURCES, REGIONS, isApiKeyConfigured, getApiQuota } from '../services/seatsAero'
+import { getAvailability, getTrips, CABIN_OPTIONS, SOURCES, REGIONS, isApiKeyConfigured, getApiQuota, toApiCabin } from '../services/seatsAero'
 import { formatDate } from '../utils/helpers'
 import { getTransferablePrograms } from '../utils/transferPartners'
 import { getCabinAvailability, CABIN_LABELS, formatMiles, formatTaxes, calcCPM } from '../utils/awardHelpers'
@@ -37,7 +37,7 @@ export default function DealsExplorer({ cards = [] }) {
 
   const buildParams = () => ({
     source: form.source,
-    cabin: form.cabin,
+    cabin: toApiCabin(form.cabin),
     startDate: form.startDate || undefined,
     endDate: form.endDate || undefined,
     originRegion: form.originRegion || undefined,
@@ -113,8 +113,10 @@ export default function DealsExplorer({ cards = [] }) {
         </div>
         {quota && (
           <div className="api-quota">
-            <span className={`quota-badge ${quota.remaining < 10 ? 'quota-low' : ''}`}>
-              API: {quota.remaining} calls left today
+            <span className={`quota-badge ${quota.remaining != null && quota.remaining < 10 ? 'quota-low' : ''}`}>
+              {quota.remaining != null
+                ? `API: ${quota.remaining} calls left today`
+                : `API: ${quota.used} calls this session`}
             </span>
           </div>
         )}
